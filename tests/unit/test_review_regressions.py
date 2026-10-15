@@ -110,7 +110,7 @@ def test_invalid_product_retains_known_group_and_invalid_group_still_rejects_pro
         SETTINGS,
     )
     book = load_workbook(BytesIO(export_analysis(analysis, ReviewState(analysis.analysis_id))))
-    assert book["Gruppeoverblik"]["J2"].value == "Uafklarede rækker i gruppen"
+    assert book["Gruppeoverblik"]["K2"].value == "Uafklarede rækker i gruppen"
 
 
 def test_unknown_optional_metadata_outside_date_block_is_ignored():

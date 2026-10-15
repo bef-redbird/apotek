@@ -371,9 +371,13 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
                         "Priskalenderen afviger fra 14 dage; tvetydige naboberegninger udelades.",
                     )
                 )
-        label_col = next(
-            (i for i, v in enumerate(values) if normal_header(v) == "lægemiddel"), None
-        )
+        # Display metadata is optional and never participates in calculations or identity.
+        # Ignore ambiguous headings and unevaluated formulas rather than guess a label.
+        display_cols = []
+        for heading in ("lægemiddel", "styrke", "form", "pakning", "firma"):
+            matches = [i for i, v in enumerate(values) if normal_header(v) == heading]
+            if len(matches) == 1:
+                display_cols.append(matches[0])
         for rowno, row in rows:
 
             def cell_at(col: int, row: list[Any] = row) -> Any:
@@ -451,10 +455,15 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
             else:
                 prices[pid] = converted
             source_rows[pid] = (*source_rows.get(pid, ()), rowno)
-            if label_col is not None:
-                label = cell_at(label_col)
+            parts = []
+            for col in display_cols:
+                label = cell_at(col)
                 if label is not None and label.data_type not in ("f", "e"):
-                    labels[pid] = str(label.value or "")[:200]
+                    text = " ".join(str(label.value or "").split())[:200]
+                    if text and text not in parts:
+                        parts.append(text)
+            if parts:
+                labels[pid] = " · ".join(parts)
             if len(issues) > 10000:
                 raise DataError("For mange ugyldige AIP-værdier; kontroller LMS-eksporten.")
         return HistoryDataset(

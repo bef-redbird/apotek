@@ -139,7 +139,7 @@ def test_native_detail_tab_state_survives_queue_changes() -> None:
     app = loaded_app()
     aid = "synthetic-analysis"
     tab_key = f"detail_tabs_{aid}"
-    assert app.session_state[tab_key] == "Prishistorik"
+    assert app.session_state[tab_key] == "Pris og alternativer"
     # AppTest exposes native tab state but has no tab-click helper.
     app.session_state[tab_key] = "Vurdering"
     app.run()
