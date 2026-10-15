@@ -14,5 +14,5 @@ explicitly identify checks not performed. Attach only synthetic screenshots when
 
 ## Limitations
 
-State remaining data/method limitations and departures from the maintained handover.
+State remaining data/method limitations and departures from the documented contracts.
 Do not attach source rows, private workbooks, user reviews or verbose command logs.

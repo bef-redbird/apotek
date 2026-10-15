@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 
 MAX_BYTES = 2 * 1024 * 1024
 FORBIDDEN_DIRS = {
+    ".agents",
+    ".codex",
     "data",
     "runtime",
     "uploads",
@@ -122,10 +124,8 @@ def content_issues(path: str, data: bytes, mode: str = "100644") -> list[str]:
         item.suffix in FORBIDDEN_SUFFIXES
         or name.startswith(("~$", ".coverage", "coverage.xml"))
         or any(token in name for token in (".duckdb.", ".db-wal", ".db-shm", ".log."))
-        or name in {"secrets.toml", "thumbs.db", ".ds_store"}
+        or name in {"secrets.toml", "thumbs.db", ".ds_store", "agents.md", "codex_handover.md"}
         or (name.startswith(".env") and name != ".env.example")
-        or str(item) in {".codex/config.toml", ".codex/history.jsonl"}
-        or str(item).startswith(".codex/sessions/")
     ):
         reasons.append("forbidden-artifact")
     if mode not in {"100644", "100755"}:
