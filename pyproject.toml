@@ -37,6 +37,9 @@ dev = [
 ]
 browser = ["pytest-playwright>=0.7,<1"]
 
+[tool.uv]
+default-groups = []
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

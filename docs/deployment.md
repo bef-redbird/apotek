@@ -15,7 +15,14 @@ access does not require repository write permission. Do not make the app public
 to work around account limits. The provider currently permits one private app;
 verify the account's actual entitlement and sharing policy before deploying.
 
-The runtime `requirements.txt` is generated from `uv.lock`:
+Community Cloud prioritizes the root `uv.lock` over `requirements.txt`.
+The project disables default uv dependency groups so an ordinary sync installs
+runtime dependencies only. Development and browser checks explicitly opt into
+their groups. Check the cloud build log to confirm the selected installer.
+See [dependency-file precedence](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies).
+
+For hosts that use requirements files, the runtime `requirements.txt` is generated
+from `uv.lock`:
 
 ```text
 uv export --locked --no-dev --no-group browser --no-emit-project --format requirements-txt --output-file requirements.txt
@@ -89,7 +96,7 @@ confirmed ISO period date (the fixture test defaults to the handover's 2026-09-2
 test context, not an asserted date for a different report). Then run:
 
 ```text
-uv run pytest -m private tests/private -q -s --tb=short --assert=plain
+uv run --group dev pytest -m private tests/private -q -s --tb=short --assert=plain
 ```
 
 The check compares aggregate counts and a small source-cell sample using an
