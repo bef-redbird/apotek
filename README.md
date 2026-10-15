@@ -33,12 +33,14 @@ No hosted instance or access-control verification is implied by these commands.
 3. Type any positive **Antal kandidater** (initially 50), or choose **Alle
    prioriterbare**. This slices the existing full ranking and preserves reviews.
    Search filters the chosen scope; it does not promote products into the queue.
-4. Select a row or search **Valgt kandidat — søg på navn eller varenummer**. Optional
+4. Select a row in the left candidate table. The right chart follows that candidate;
+   **Vælg fra listen med tastatur** provides a keyboard fallback for the same visible rows. Optional
    medicine, strength, form, pack and company labels distinguish products.
    **Forrige kandidat / Næste kandidat** follow the filtered list in canonical order; table sorting
    changes only the table. Inspect current cost, AIP and the product's own historical
-   median under **Sammenlign priser**. Select an alternative above the chart;
-   **Vurder dette alternativ** is available when it passes the candidate filter.
+   median under **Sammenlign priser**. Check alternatives below the chart to compare their
+   curves (up to five); uncheck to hide them. Only the selected candidate's found group
+   is offered. **Vurder alternativ [varenr.]** explicitly opens an eligible alternative.
    All found group members remain inspectable, including H/K and missing history.
    Current groups are not historical memberships or a verified complete market.
    Package AIP is not a unit-price or dispensing-price comparison.
@@ -54,13 +56,13 @@ No hosted instance or access-control verification is implied by these commands.
    records the reproducible scope. Download JSON before disconnecting or replacing
    the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
-The workspace follows three numbered sections: a full-width candidate table,
-full-width price comparison with a larger chart, and an always-visible assessment.
-The stacked layout preserves room for medicine names and curves at laptop widths;
+The workspace shows the candidate list on the left and price comparison on the right,
+with an always-visible assessment below both. The two panels stack on narrow screens;
 previous/next navigation stays with the selected medicine. In-page links jump to
 prices, assessment and explanations. The chart's period range is a visible display
-control; additional overlays and retrospective prices are in
-**Flere alternativer og grafvalg**. Import and export controls stay in disclosures.
+control. One checklist selects group alternatives; a disclosure holds additional members
+of large groups. Members without history remain visible with their missing-data reason.
+Retrospective prices are in **Flere grafvalg**. Import and export controls stay in disclosures.
 Per-product comparison choices survive product changes; a prepared Excel download
 survives inspection changes but is invalidated when saved reviews or its scope change.
 

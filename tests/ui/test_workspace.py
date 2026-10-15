@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
+from streamlit.testing.v1.element_tree import Selectbox
 
 from bef_redbird.charts import history_chart
 from bef_redbird.domain import (
@@ -25,6 +26,10 @@ from bef_redbird.domain import (
 from bef_redbird.ui import _percentage_input
 
 APP = Path(__file__).resolve().parents[2] / "app.py"
+
+
+def candidate_picker(app: AppTest) -> Selectbox:
+    return next(widget for widget in app.selectbox if widget.label == "Kandidat i den viste liste")
 
 
 def synthetic_analysis(count: int = 120, *, rankable: bool = True) -> AnalysisResult:
@@ -110,7 +115,7 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     app.number_input(key=f"queue_n_{aid}").set_value(80).run()
     assert not app.exception
     assert any("Viser 80 af 80" in item.value for item in app.caption)
-    app.selectbox(key=f"product_{aid}").select("000080").run()
+    candidate_picker(app).select("000080").run()
     app.text_area(key=f"review_note_{aid}_000080").input("Bevar min note")
     app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
     app.checkbox(key=f"review_selected_{aid}_000080").check()
@@ -127,9 +132,9 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     assert any("Alle 120 prioriterbare" in item.value for item in app.caption)
     app.selectbox(key=f"queue_mode_{aid}").select("Alle kandidater").run()
     assert app.session_state["review"].queue.mode == "all_rankable"
-    app.selectbox(key=f"product_{aid}").select("000001").run()
+    candidate_picker(app).select("000001").run()
     assert app.text_area(key=f"review_note_{aid}_000001").value == ""
-    app.selectbox(key=f"product_{aid}").select("000080").run()
+    candidate_picker(app).select("000080").run()
     assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar min note"
     assert app.selectbox(key=f"review_status_{aid}_000080").value == "Interessant"
     assert not app.exception
@@ -185,16 +190,19 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     analysis = synthetic_analysis()
     app = loaded_app(analysis)
     aid = analysis.analysis_id
-    app.number_input(key=f"queue_n_{aid}").set_value(queue.top_n).run()
+    app.number_input(key=f"queue_n_{aid}").set_value(80).run()
     if queue.mode == "all_rankable":
         app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
-    app.selectbox(key=f"product_{aid}").select("000080").run()
+    candidate_picker(app).select("000080").run()
     app.text_area(key=f"review_note_{aid}_000080").input("Gammel periodes note")
     app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
     app.checkbox(key=f"review_selected_{aid}_000080").check()
     next(b for b in app.button if b.label == "Gem vurdering").click().run()
+    if queue.mode == "top_n":
+        app.number_input(key=f"queue_n_{aid}").set_value(queue.top_n).run()
     app.button(key="prepare_excel").click().run()
     assert "prepared_export" in app.session_state
+    old_picker_key = candidate_picker(app).key
 
     def replacement(
         snapshot: CitoSnapshot,
@@ -231,7 +239,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     for key in (
         f"queue_n_{aid}",
         f"queue_mode_{aid}",
-        f"product_{aid}",
+        old_picker_key,
         f"review_note_{aid}_000080",
         f"review_status_{aid}_000080",
         f"review_selected_{aid}_000080",
@@ -275,7 +283,7 @@ def test_failed_replacement_preserves_queue_and_analysis_bound_state(
     assert app.session_state["prepared_export"] == prepared
     assert app.number_input(key=f"queue_n_{aid}").value == 80
     assert app.selectbox(key=f"queue_mode_{aid}").value == "Alle prioriterbare"
-    assert app.selectbox(key=f"product_{aid}").value == "000080"
+    assert candidate_picker(app).value == "000080"
     assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar alt"
     assert any("Syntetisk afvist" in item.value for item in app.error)
     assert not app.exception
