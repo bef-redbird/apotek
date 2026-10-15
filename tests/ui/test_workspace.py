@@ -135,20 +135,18 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     assert not app.exception
 
 
-def test_native_detail_tab_state_survives_queue_changes() -> None:
+def test_review_remains_available_beside_price_evidence_without_tabs() -> None:
     app = loaded_app()
     aid = "synthetic-analysis"
-    tab_key = f"detail_tabs_{aid}"
-    assert app.session_state[tab_key] == "Pris og alternativer"
-    # AppTest exposes native tab state but has no tab-click helper.
-    app.session_state[tab_key] = "Vurdering"
-    app.run()
-    app.number_input(key=f"queue_n_{aid}").set_value(80).run()
-    assert app.session_state[tab_key] == "Vurdering"
-    app.number_input(key=f"queue_n_{aid}").set_value(17).run()
-    assert app.session_state[tab_key] == "Vurdering"
+    app.text_area(key=f"review_note_{aid}_000001").input("Bevar kladden").run()
+    for count in (80, 17):
+        app.number_input(key=f"queue_n_{aid}").set_value(count).run()
+        assert app.text_area(key=f"review_note_{aid}_000001").value == "Bevar kladden"
+        assert len(app.get("plotly_chart")) == 1
+        assert not app.tabs
     app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
-    assert app.session_state[tab_key] == "Vurdering"
+    assert app.text_area(key=f"review_note_{aid}_000001").value == "Bevar kladden"
+    assert app.number_input(key=f"queue_n_{aid}").disabled
     assert not app.exception
 
 
@@ -225,7 +223,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     assert review.selected_ids == set()
     assert review.inspected_id == "000001"
     assert app.number_input(key=f"queue_n_{new_aid}").value == queue.top_n
-    expected_mode = "Alle prioriterbare" if queue.mode == "all_rankable" else "Top N"
+    expected_mode = "Alle prioriterbare" if queue.mode == "all_rankable" else "Prioriteret liste"
     assert app.selectbox(key=f"queue_mode_{new_aid}").value == expected_mode
     assert app.text_area(key=f"review_note_{new_aid}_000001").value == ""
     assert not app.checkbox(key=f"review_selected_{new_aid}_000001").value
@@ -308,7 +306,7 @@ def test_unrankable_and_no_candidate_states() -> None:
     app = loaded_app(synthetic_analysis(3, rankable=False))
     assert any("Viser 0 af 50" in item.value for item in app.caption)
     assert any("Ingen produkter i denne visning" in item.value for item in app.info)
-    app.selectbox(key="queue_mode_synthetic-analysis").select("Uden prioritet").run()
+    app.selectbox(key="queue_mode_synthetic-analysis").select("Kan ikke prioriteres").run()
     assert any("3 synlige" in item.value for item in app.caption)
     assert not app.exception
     empty = loaded_app(synthetic_analysis(0))

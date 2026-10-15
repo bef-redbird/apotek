@@ -59,10 +59,10 @@ def history_chart(
                 line={
                     "shape": "hv",
                     "color": colors[index],
-                    "width": 3 if index == 0 else 2,
+                    "width": 3.5 if index == 0 else 2.5,
                     "dash": dashes[index],
                 },
-                marker={"size": 5, "symbol": symbols[index]},
+                marker={"size": 6, "symbol": symbols[index]},
                 hovertemplate=(
                     f"{escape(label)}<br>Varenr. {item_id}<br>Periode %{{x|%d-%m-%Y}}<br>"
                     "AIP %{y:.2f} DKK<br>LMS · observeret pris<extra></extra>"
@@ -80,16 +80,26 @@ def history_chart(
             annotation_position="top left",
         )
     figure.update_layout(
-        height=360,
-        margin={"l": 8, "r": 8, "t": 45, "b": 8},
+        height=520,
+        margin={"l": 12, "r": 20, "t": 16, "b": 12},
         xaxis_title="Prisperiodens start",
         xaxis_tickformat="%d-%m-%Y",
         separators=",.",
         yaxis_title="AIP pr. pakning (DKK)",
         showlegend=True,
-        legend={"orientation": "h", "y": -0.25, "yanchor": "top", "x": 0, "font": {"size": 11}},
+        legend={
+            "orientation": "h",
+            "y": -0.22,
+            "yanchor": "top",
+            "x": 0,
+            "font": {"size": 13},
+            "maxheight": 0.2,
+        },
+        font={"size": 14, "color": "#202621"},
         hovermode="closest",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#FFFFFF",
     )
+    figure.update_xaxes(showgrid=True, gridcolor="#E4E7E3", showline=True, linecolor="#9AA69F")
+    figure.update_yaxes(showgrid=True, gridcolor="#E4E7E3", showline=True, linecolor="#9AA69F")
     return figure
