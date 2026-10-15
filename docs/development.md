@@ -47,8 +47,14 @@ Before a PR, inspect origin, status, staged and unstaged diffs, branch and workt
 Run the relevant checks and record factual results in the PR template. Explain
 material method changes, data impact and any migration/rollback. Do not self-approve
 through another identity, bypass required checks or force an administrative merge.
-Repository protection/private access are administrative gates, not settings this
-workflow claims to configure. Use squash merge when repository policy permits.
+The owner authorizes normal squash merge once all code reviews for the current
+PR head are complete, findings are fixed and resolved, and both required CI
+checks pass. Codex review comments count toward this workflow; a separate formal
+GitHub approving review is not required. The configured approval count is zero,
+with strict Linux/Windows checks, enforced branch protection and force-push
+restrictions retained. Re-review changed code after fixes; never infer acceptance
+from an unfinished review or successful checks on an older head. Host access and
+permission to process private inputs remain separate deployment gates.
 
 ## Safe branch cleanup
 
