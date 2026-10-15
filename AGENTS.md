@@ -28,3 +28,8 @@ private rows or paths in diagnostics or send data to new services.
 Use focused PRs and do not remove user changes. Clean merged branches only
 after verifying merged PR, unchanged head, worktree use and dependencies.
 Never bulk-force-delete branches or auto-merge through hooks.
+
+Owner-authorized merge policy: continue once all code reviews for the current
+PR head are complete, findings are fixed and resolved, and both required CI
+checks pass. A separate formal GitHub approval is not required. Use normal
+squash merge; never bypass failing checks or pending/unresolved review.

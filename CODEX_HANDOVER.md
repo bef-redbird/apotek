@@ -960,6 +960,14 @@ The PR should state: behaviour changed, data/financial impact, tests actually ru
 
 Never self-approve changes with another tool identity, bypass failing required checks or use an admin override to force a merge. Agent reviews are helpful but not independent business approval.
 
+**Owner-authorized merge policy:** once all code reviews for the current PR head
+are complete, findings are fixed and resolved, and both required CI checks pass,
+continue with normal squash merge and verified branch cleanup. A separate formal
+GitHub approving review is not required; its configured count is zero. Strict
+Linux/Windows checks and branch protections remain enforced. Re-review changed
+code after fixes. This policy does not approve private-data processing or replace
+host acceptance checks.
+
 ### 14.3 CI
 
 One straightforward workflow on `pull_request` and pushes to the default branch is enough. Use locked dependencies, Ruff, the selected type checker, synthetic unit/integration/AppTest tests and the tracked-file hygiene check. Add the small browser test with synthetic uploads. Include a Windows import/path smoke test if scripts claim Windows support.
