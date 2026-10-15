@@ -460,7 +460,14 @@ Compact filter/data rail  | Candidate list       | Selected product
                          |                       | evidence / warnings / note
 ```
 
-Avoid nested scroll boxes where possible. On a typical laptop, a collapsible sidebar plus roughly 40/60 list/detail columns is sufficient. The candidate list should remain in view during analysis; do not navigate to a new product page.
+Avoid nested scroll boxes where possible. The implemented workspace uses three
+numbered, full-width sections: candidate selection, price comparison and assessment.
+The earlier 40/60 split made descriptions and charts too narrow in actual use.
+Keep the candidate table open above the detail section, with a searchable selector
+and previous/next controls beside the selected medicine. This trades simultaneous
+list/chart visibility for readable names and curves; it does not navigate to a new
+product page. Use native bordered containers and a 520-pixel chart, with no custom
+DOM styling. At narrow widths, controls wrap or stack.
 
 ### 7.3 Import and data status
 
@@ -491,7 +498,8 @@ own historical median and price gap belong in the detail panel. Native table sor
 remain independent of previous/next navigation, which follows the visible filtered
 canonical sequence. An outside-list selection disables that sequence navigation.
 
-Price evidence and alternative selection share the default tab. Every found valid
+Price evidence and alternative selection share the full-width comparison section.
+The assessment is always visible below it, without switching tabs. Every found valid
 snapshot group member can be inspected; opening an alternative as the active candidate
 is explicit and offered only for eligible candidates. Comparison never changes the
 review owner or eligibility. Different line styles and marker shapes supplement chart
@@ -499,6 +507,12 @@ colours. Draft reviews persist across product switches in session; explicit save
 save-and-next commits them to Excel/JSON. Restoring JSON deliberately discards drafts.
 The existing calculation/parser method versions and JSON schema stay unchanged;
 optional descriptive labels do not alter numeric parsing, ranking or analysis identity.
+
+Use plain task labels: **Prioriteret liste**, **Valgt kandidat**, **Forrige kandidat**,
+**Næste kandidat**, **Vurder dette alternativ** and **Gem og næste kandidat**.
+The editable count is enabled for the prioritized list and retained while other
+views are selected. Show a candidate's priority reason near its prices. Chart range
+is visible; extra overlays, group details and retrospective options are secondary.
 
 Selecting a row is not the same as marking it for export. Use an explicit saved selection/review control. Keep current inspection, export selection and review status separate.
 
@@ -523,6 +537,17 @@ Status choices: `Ikke vurderet`, `Interessant`, `Fravalgt`, `Undersøg nærmere`
 ### 7.7 Export and restart behaviour
 
 Users can export without losing their place or triggering a new analysis. If a hosted session is temporary, say clearly that data and notes can disappear after reset/disconnection. Never label session-only data as permanently saved. Persistent mode must visibly identify the active workspace and latest successful save.
+
+### 7.8 Method documentation
+
+At the bottom of the loaded workspace, **Sådan læses analysen** provides native
+disclosures for source relationships, applied settings/time boundaries, selection
+and rankability, exact calculations, and priority/view/export behavior. Derive shown
+settings and date ranges from the applied result, never pending controls or defaults.
+Explain exact-threshold exclusion, mid-rank ties, half-øre medians, 14-day adjacency
+and the observed-following-period denominator. Distinguish eligibility from ranking,
+current report groups from historical membership, and historical gaps from savings.
+Keep arithmetic, identity, queue membership and export contracts unchanged.
 
 ---
 

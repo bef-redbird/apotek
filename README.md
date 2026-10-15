@@ -33,18 +33,18 @@ No hosted instance or access-control verification is implied by these commands.
 3. Type any positive **Antal kandidater** (initially 50), or choose **Alle
    prioriterbare**. This slices the existing full ranking and preserves reviews.
    Search filters the chosen scope; it does not promote products into the queue.
-4. Select a row or search **Find en kandidat (navn eller varenummer)**. Optional
+4. Select a row or search **Valgt kandidat — søg på navn eller varenummer**. Optional
    medicine, strength, form, pack and company labels distinguish products.
-   **Forrige / Næste** follow the filtered list in canonical order; table sorting
+   **Forrige kandidat / Næste kandidat** follow the filtered list in canonical order; table sorting
    changes only the table. Inspect current cost, AIP and the product's own historical
-   median under **Pris og alternativer**. Select an alternative beside the chart;
-   **Åbn alternativ som kandidat** is available when it passes the candidate filter.
+   median under **Sammenlign priser**. Select an alternative above the chart;
+   **Vurder dette alternativ** is available when it passes the candidate filter.
    All found group members remain inspectable, including H/K and missing history.
    Current groups are not historical memberships or a verified complete market.
    Package AIP is not a unit-price or dispensing-price comparison.
-5. Under **Vurdering**, choose status, note and export inclusion. Drafts survive
+5. Under **Gem din vurdering**, choose status, note and export inclusion. Drafts survive
    product changes in this session. **Gem vurdering** commits them to exports;
-   **Gem og næste** saves and opens the next visible candidate. Only saved reviews
+   **Gem og næste kandidat** saves and opens the next visible candidate. Only saved reviews
    appear in downloads. Replacing the analysis requires acknowledging saved work
    or unsaved drafts; restoring a JSON copy deliberately replaces both.
 6. Open **Eksport og sessionskopi**. Export the canonical queue, explicit selection
@@ -54,11 +54,21 @@ No hosted instance or access-control verification is implied by these commands.
    records the reproducible scope. Download JSON before disconnecting or replacing
    the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
-On desktop, the candidate list stays beside the selected product's price-history,
-comparison and review tabs. Import and export controls stay in disclosures.
-Narrow screens stack the two panels. Per-product comparison choices survive
-product changes; a prepared Excel download survives inspection changes but
-is invalidated when saved reviews or its scope change.
+The workspace follows three numbered sections: a full-width candidate table,
+full-width price comparison with a larger chart, and an always-visible assessment.
+The stacked layout preserves room for medicine names and curves at laptop widths;
+previous/next navigation stays with the selected medicine. In-page links jump to
+prices, assessment and explanations. The chart's period range is a visible display
+control; additional overlays and retrospective prices are in
+**Flere alternativer og grafvalg**. Import and export controls stay in disclosures.
+Per-product comparison choices survive product changes; a prepared Excel download
+survives inspection changes but is invalidated when saved reviews or its scope change.
+
+At the bottom, **Sådan læses analysen** documents how the sources relate, candidate
+selection, rankability checks, exact calculations and prioritization. It shows the
+loaded analysis's applied settings and dates, not pending edits. Historical counts
+and events remain available below the assessment. No calculation or schema version
+changes are needed for this presentation-only layout and documentation change.
 
 Everything is temporary and isolated to the browser session. Restart/disconnection
 can lose uploads and notes. Restore JSON only after loading identical source bytes,

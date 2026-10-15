@@ -30,32 +30,32 @@ def test_unsaved_draft_survives_navigation_but_is_not_exported_as_saved() -> Non
     aid = "synthetic-analysis"
     app.text_area(key=f"review_note_{aid}_000001").input("Afklar levering").run()
     app.selectbox(key=f"review_status_{aid}_000001").select("Undersøg nærmere").run()
-    next(b for b in app.button if b.label == "Næste").click().run()
+    next(b for b in app.button if b.label == "Næste kandidat").click().run()
     assert app.session_state["review"].inspected_id == "000002"
     assert app.text_area(key=f"review_note_{aid}_000002").value == ""
     assert app.session_state["review"].reviews == {}
     assert any("ugemte vurderinger" in w.value for w in app.warning)
-    next(b for b in app.button if b.label == "Forrige").click().run()
+    next(b for b in app.button if b.label == "Forrige kandidat").click().run()
     assert app.text_area(key=f"review_note_{aid}_000001").value == "Afklar levering"
     assert app.selectbox(key=f"review_status_{aid}_000001").value == "Undersøg nærmere"
-    next(b for b in app.button if b.label == "Gem og næste").click().run()
+    next(b for b in app.button if b.label == "Gem og næste kandidat").click().run()
     review = app.session_state["review"]
     assert review.reviews == {"000001": Review("Undersøg nærmere", "Afklar levering")}
     assert review.inspected_id == "000002"
-    assert app.session_state[f"detail_tabs_{aid}"] == "Pris og alternativer"
+    assert not app.tabs
     assert not app.exception
 
 
 def test_navigation_uses_visible_sequence_without_changing_queue() -> None:
     app = loaded_app(synthetic_analysis(3))
     app.text_input(key="search").input("000002").run()
-    assert next(b for b in app.button if b.label == "Næste").disabled
+    assert next(b for b in app.button if b.label == "Næste kandidat").disabled
     app.selectbox(key="product_synthetic-analysis").select("000002").run()
-    assert next(b for b in app.button if b.label == "Forrige").disabled
-    assert next(b for b in app.button if b.label == "Gem og næste").disabled
+    assert next(b for b in app.button if b.label == "Forrige kandidat").disabled
+    assert next(b for b in app.button if b.label == "Gem og næste kandidat").disabled
     assert app.session_state["analysis"].ranked_ids == ("000001", "000002", "000003")
     app.text_input(key="search").input("").run()
-    next(b for b in app.button if b.label == "Næste").click().run()
+    next(b for b in app.button if b.label == "Næste kandidat").click().run()
     assert app.session_state["review"].inspected_id == "000003"
     assert not app.exception
 
@@ -71,11 +71,11 @@ def test_all_group_members_are_comparable_without_changing_review_owner() -> Non
     app.selectbox(key=comparison).select("900001").run()
     assert app.session_state["review"].inspected_id == "000001"
     assert any("Opbevaring H" in c.value for c in app.caption)
-    assert not any(b.label == "Åbn alternativ som kandidat" for b in app.button)
+    assert not any(b.label == "Vurder dette alternativ" for b in app.button)
     app.selectbox(key=comparison).select("900002").run()
     assert any("Historik mangler for dette alternativ" in w.value for w in app.warning)
     app.selectbox(key=comparison).select("000002").run()
-    next(b for b in app.button if b.label == "Åbn alternativ som kandidat").click().run()
+    next(b for b in app.button if b.label == "Vurder dette alternativ").click().run()
     assert app.session_state["review"].inspected_id == "000002"
     app.selectbox(key=f"product_{aid}").select("900004").run()
     assert app.text_area(key=f"review_note_{aid}_900004").value == ""
