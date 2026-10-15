@@ -96,18 +96,45 @@ def _settled(page: Page) -> None:
     })""")
 
 
+def _keyboard_picker(page: Page) -> None:
+    details = page.get_by_text("Vælg fra listen med tastatur", exact=True).locator(
+        "xpath=ancestor::details[1]"
+    )
+    if details.get_attribute("open") is None:
+        details.locator("summary").click()
+
+
+def _alternative(page: Page, product_id: str) -> Locator:
+    _settled(page)
+    checkbox = page.get_by_role("checkbox", name=re.compile(rf"^{product_id} · "))
+    if not checkbox.is_visible():
+        page.get_by_text(re.compile(r"^Vis flere alternativer ")).click()
+    checkbox.evaluate("e => e.scrollIntoView({block:'center', behavior:'instant'})")
+    return checkbox
+
+
+def _toggle_alternative(page: Page, product_id: str, *, checked: bool = True) -> None:
+    checkbox = _alternative(page, product_id)
+    expect(checkbox).to_be_enabled()
+    # Native Streamlit's checkbox input is covered by its associated label.
+    # Exercise the accessible keyboard interaction without bypassing event handlers.
+    if checkbox.is_checked() != checked:
+        checkbox.press("Space")
+    expect(checkbox).to_be_checked(checked=checked)
+    _settled(page)
+
+
 def _select(page: Page, label: str, value: str) -> None:
     _settled(page)
+    if label == "Kandidat i den viste liste":
+        _keyboard_picker(page)
     control = page.get_by_role("combobox", name=label, exact=True)
     control.evaluate("e => e.scrollIntoView({block:'center', behavior:'instant'})")
     expect(control).to_be_in_viewport(ratio=1)
     control.click()
-    if label == "Valgt kandidat — søg på navn eller varenummer":
+    if label == "Kandidat i den viste liste":
         control.fill(value)
-    formatted = label in (
-        "Valgt kandidat — søg på navn eller varenummer",
-        "Sammenlign med alternativ",
-    )
+    formatted = label in ("Kandidat i den viste liste",)
     option = (
         page.get_by_role("option", name=re.compile(rf"^{re.escape(value)} · "))
         if formatted
@@ -132,8 +159,16 @@ def _load(
     count: int = 120,
     *,
     descriptive_labels: bool = False,
+    large_group: bool = False,
 ) -> None:
     cito, history, period = synthetic_workbooks(count=count, periods=40)
+    if large_group:
+        workbook = load_workbook(BytesIO(cito))
+        for row in workbook["Table"].iter_rows(min_row=2):
+            row[5].value = "1"
+        output = BytesIO()
+        workbook.save(output)
+        cito = output.getvalue()
     if descriptive_labels:
         # Display-only metadata exercises ordinary long pharmacy descriptions.
         workbook = load_workbook(BytesIO(history))
@@ -215,7 +250,7 @@ def _visible_height(locator: Locator) -> float:
     )
 
 
-def _stacked_layout_evidence(page: Page, tmp_path: Path) -> None:
+def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
     _settled(page)
     queue = page.locator(".st-key-candidate_list")
     prices = page.locator(".st-key-price_workspace")
@@ -240,21 +275,32 @@ def _stacked_layout_evidence(page: Page, tmp_path: Path) -> None:
         assert all(sections)
         candidate_box, price_box, review_box = sections
         assert candidate_box is not None and price_box is not None and review_box is not None
-        for current, following in ((candidate_box, price_box), (price_box, review_box)):
-            assert current["y"] + current["height"] <= following["y"], sections
-            assert abs(current["x"] - following["x"]) <= 2, sections
-            assert abs(current["width"] - following["width"]) <= 2, sections
-        assert candidate_box["width"] >= (1100 if width > 600 else 450)
+        if width > 600:
+            assert abs(candidate_box["y"] - price_box["y"]) <= 2, sections
+            assert candidate_box["x"] + candidate_box["width"] < price_box["x"], sections
+            assert price_box["width"] > candidate_box["width"], sections
+            assert candidate_box["width"] >= 450, sections
+            assert review_box["width"] > candidate_box["width"] + price_box["width"], sections
+        else:
+            assert candidate_box["y"] + candidate_box["height"] <= price_box["y"], sections
+            assert abs(candidate_box["x"] - price_box["x"]) <= 2, sections
+            assert abs(candidate_box["width"] - price_box["width"]) <= 2, sections
+            assert candidate_box["width"] >= 450, sections
+        assert review_box["y"] >= max(
+            candidate_box["y"] + candidate_box["height"],
+            price_box["y"] + price_box["height"],
+        ), sections
+        assert abs(review_box["x"] - candidate_box["x"]) <= 2, sections
         grid_box = grid.bounding_box()
         assert grid_box is not None and grid_box["width"] >= candidate_box["width"] - 40
-        assert grid_box["height"] >= 430, "Candidate rows must have a readable table viewport"
+        assert grid_box["height"] >= 590, "Candidate rows must have a readable table viewport"
         dimensions = chart.locator(".js-plotly-plot").evaluate("""plot => ({
             width: plot._fullLayout._size.w,
             height: plot._fullLayout._size.h,
             font: plot._fullLayout.font.size,
         })""")
         assert dimensions["height"] >= 320, dimensions
-        assert dimensions["width"] >= (900 if width > 600 else 300), dimensions
+        assert dimensions["width"] >= (500 if width > 600 else 300), dimensions
         assert dimensions["font"] >= 12, dimensions
         method_box = page.get_by_role(
             "heading", name="Sådan læses analysen", exact=True
@@ -278,7 +324,20 @@ def _stacked_layout_evidence(page: Page, tmp_path: Path) -> None:
         })""")
         assert overflow["page"] <= overflow["viewport"] + 1, overflow
         assert not overflow["controls"], overflow
-        metrics[size] = {"sections": sections, "grid": grid_box, "plot": dimensions}
+        grid_scroll = grid.evaluate("""element => [...element.querySelectorAll('*')]
+            .filter(node => /(auto|scroll)/.test(getComputedStyle(node).overflowX))
+            .map(node => ({width:node.clientWidth, content:node.scrollWidth}))""")
+        assert grid_scroll, "The native table scroll viewport must be measurable"
+        assert all(item["content"] <= item["width"] + 2 for item in grid_scroll), grid_scroll
+        expect(grid.locator("th")).to_have_text(
+            ["Prioritet", "Varenr.", "Lægemiddel, styrke og pakning", "Kostpris, kr."]
+        )
+        metrics[size] = {
+            "sections": sections,
+            "grid": grid_box,
+            "plot": dimensions,
+            "grid_scroll": grid_scroll,
+        }
         for section, target in (
             ("controls", queue),
             ("table", grid),
@@ -291,7 +350,7 @@ def _stacked_layout_evidence(page: Page, tmp_path: Path) -> None:
             }""")
             if section == "chart":
                 assert _visible_height(chart) >= 440
-            page.screenshot(path=str(tmp_path / f"stacked-{section}-{size}.png"))
+            page.screenshot(path=str(tmp_path / f"linked-{section}-{size}.png"))
     (tmp_path / "layout-metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     page.set_viewport_size({"width": 1366, "height": 768})
 
@@ -307,7 +366,7 @@ def test_descriptive_layout(browser: Browser, workspace_url: str, tmp_path: Path
                 has_text=re.compile(r"^000001 · Eksempellægemiddel")
             )
         ).to_be_visible()
-        _stacked_layout_evidence(page, tmp_path)
+        _linked_layout_evidence(page, tmp_path)
         for size, width, height in (("laptop", 1366, 768), ("desktop", 1920, 1080)):
             page.set_viewport_size({"width": width, "height": height})
             for section, label in (
@@ -356,9 +415,8 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
     page.set_default_timeout(10000)
     try:
         _load(page, workspace_url, tmp_path, count=6)
-        selector = page.get_by_role(
-            "combobox", name="Valgt kandidat — søg på navn eller varenummer", exact=True
-        )
+        _keyboard_picker(page)
+        selector = page.get_by_role("combobox", name="Kandidat i den viste liste", exact=True)
         # Human names are searchable while product IDs remain the review owner.
         selector.click()
         selector.fill("Eksempelpakning 2")
@@ -397,43 +455,54 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         _settled(page)
         expect(page.get_by_role("tab")).to_have_count(0)
         expect(page.get_by_test_id("stPlotlyChart").first).to_be_visible()
-        _select(page, "Valgt kandidat — søg på navn eller varenummer", "000002")
+        _select(page, "Kandidat i den viste liste", "000002")
         expect(note).to_have_value("Ugemt kladde til vare 2")
         expect(page.get_by_text("Ugemte ændringer.", exact=False)).to_have_count(0)
-        # Compare a noncandidate with history without moving the review owner.
-        _select(page, "Sammenlign med alternativ", "900001")
+        # Comparison only toggles traces; the candidate and its draft retain ownership.
+        _toggle_alternative(page, "900001")
         expect(selector).to_have_value("000002 · Eksempelpakning 2")
         expect(page.get_by_text("Opbevaring H:", exact=False)).to_be_visible()
-        expect(page.get_by_role("button", name="Vurder dette alternativ")).to_have_count(0)
+        expect(page.get_by_role("button", name="Vurder alternativ 900001")).to_have_count(0)
         page.wait_for_function(
             "() => {const p=document.querySelector('.js-plotly-plot');"
             "return p && p.data.length===2 && p.data[0].meta==='000002' "
             "&& p.data[1].meta==='900001' && p.data[0].line.dash!==p.data[1].line.dash "
             "&& p.data[0].marker.symbol!==p.data[1].marker.symbol}"
         )
-        # Missing-history group records remain selectable and explain missingness.
-        _select(page, "Sammenlign med alternativ", "900002")
+        _toggle_alternative(page, "900001", checked=False)
+        page.wait_for_function("() => document.querySelector('.js-plotly-plot').data.length===1")
+        _toggle_alternative(page, "900001")
+        expect(_alternative(page, "900002")).to_be_disabled()
         expect(
-            page.get_by_text("Historik mangler for dette alternativ.", exact=False)
+            page.get_by_text("Historik mangler; ingen kurve kan vises.", exact=False).first
         ).to_be_visible()
-        expect(page.get_by_text("Aktuel AIP Mangler kr.", exact=False)).to_be_visible()
         expect(selector).to_have_value("000002 · Eksempelpakning 2")
-        _select(page, "Sammenlign med alternativ", "900004")
-        page.get_by_role("button", name="Vurder dette alternativ", exact=True).click()
-        expect(selector).to_have_value("900004 · Navn ikke oplyst")
+        expect(page.get_by_role("button", name="Vurder alternativ 900002")).to_have_count(0)
+        page.get_by_role("button", name="Vurder alternativ 900004", exact=True).click()
+        _settled(page)
+        expect(selector).to_have_value("")
+        expect(
+            page.get_by_test_id("stText").filter(has_text=re.compile(r"^900004 · "))
+        ).to_be_visible()
         expect(
             page.get_by_text("Historisk prisniveau kan ikke sammenlignes", exact=False)
         ).to_be_visible()
         expect(note).to_have_value("")
-        _select(page, "Valgt kandidat — søg på navn eller varenummer", "000002")
+        _select(page, "Kandidat i den viste liste", "000002")
         expect(note).to_have_value("Ugemt kladde til vare 2")
-        expect(
-            page.get_by_role("combobox", name="Sammenlign med alternativ", exact=True)
-        ).to_have_value("900004 · Navn ikke oplyst")
-        _select(page, "Sammenlign med alternativ", "000001")
-        page.get_by_role("button", name="Vurder dette alternativ", exact=True).click()
+        expect(_alternative(page, "900001")).to_be_checked()
+        _toggle_alternative(page, "000001")
+        page.locator(".st-key-price_workspace").get_by_text(
+            "Sammenlign med substitutionsalternativer", exact=True
+        ).evaluate("""e => {
+            e.scrollIntoView({block:'center'});
+        }""")
+        page.screenshot(path=str(tmp_path / "two-selected-alternatives-laptop.png"))
+        page.get_by_role("button", name="Vurder alternativ 000001", exact=True).click()
+        _settled(page)
         expect(selector).to_have_value("000001 · Eksempelpakning 1")
         expect(note).to_have_value("")
+        expect(_alternative(page, "900001")).not_to_be_checked()
         page.get_by_text("Eksport og sessionskopi", exact=True).click()
         saved = _download(page, "Hent sessionskopi (JSON)", tmp_path)
         payload = json.loads(saved.read_bytes())
@@ -445,6 +514,37 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         (tmp_path / "decision-failure.html").write_text(page.content(), encoding="utf-8")
         print(f"Synthetic decision artifacts: {tmp_path}")
         raise
+    finally:
+        context.close()
+
+
+def test_group_checkbox_limit(browser: Browser, workspace_url: str, tmp_path: Path) -> None:
+    context = browser.new_context(viewport={"width": 1366, "height": 768})
+    page = context.new_page()
+    page.set_default_timeout(10000)
+    try:
+        _load(page, workspace_url, tmp_path, count=9, large_group=True)
+        panel = page.locator(".st-key-price_workspace")
+        # Exactly one control per alternative, including disabled missing-history rows.
+        expect(_alternative(page, "900002")).to_be_disabled()
+        expect(panel.get_by_role("checkbox", name=re.compile(r"^\d{6} · "))).to_have_count(12)
+        expect(_alternative(page, "000009")).to_be_enabled()
+        for pid in ("000002", "000003", "000004", "000005", "000006"):
+            _toggle_alternative(page, pid)
+        _settled(page)
+        expect(_alternative(page, "000007")).to_be_disabled()
+        expect(_alternative(page, "000002")).to_be_enabled()
+        page.wait_for_function("() => document.querySelector('.js-plotly-plot').data.length===6")
+        _toggle_alternative(page, "000002", checked=False)
+        _settled(page)
+        expect(_alternative(page, "000007")).to_be_enabled()
+        _toggle_alternative(page, "000007")
+        _settled(page)
+        page.wait_for_function(
+            "() => {const ids=document.querySelector('.js-plotly-plot').data.map(t=>t.meta);"
+            "return ids.length===6 && ids.includes('000007') && !ids.includes('000002')}"
+        )
+        page.screenshot(path=str(tmp_path / "five-alternatives-laptop.png"), full_page=True)
     finally:
         context.close()
 
@@ -468,9 +568,8 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         box = canvas.bounding_box()
         assert box is not None
         grid.click(position={"x": 16, "y": 56})
-        selector = page.get_by_role(
-            "combobox", name="Valgt kandidat — søg på navn eller varenummer", exact=True
-        )
+        _keyboard_picker(page)
+        selector = page.get_by_role("combobox", name="Kandidat i den viste liste", exact=True)
         expect(selector).to_have_value("000001 · Eksempelpakning 1")
         expect(page.get_by_role("button", name="Clear selection", exact=True)).to_be_visible()
         _settled(page)
@@ -481,9 +580,19 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         expect(selector).to_have_value("000001 · Eksempelpakning 1")
         _settled(page)
         # Native header sorting changes visible rows without changing canonical ranks.
-        grid.click(position={"x": 105, "y": 15})
+        grid.evaluate("""e => {
+            e.scrollIntoView({block:'start'});
+            e.closest('[data-testid="stMain"]').scrollBy(0, -80);
+        }""")
+        grid.click(position={"x": 65, "y": 15})
+        ascending = page.get_by_role("menuitem", name="Sort ascending", exact=True)
+        if ascending.is_visible():
+            ascending.click()
         expect(grid.locator("th").first).to_have_text("↑ Prioritet")
-        grid.click(position={"x": 105, "y": 15})
+        grid.click(position={"x": 65, "y": 15})
+        descending = page.get_by_role("menuitem", name="Sort descending", exact=True)
+        if descending.is_visible():
+            descending.click()
         expect(grid.locator("th").first).to_have_text("↓ Prioritet")
         grid.click(position={"x": 16, "y": 56})
         expect(selector).to_have_value("000080 · Eksempelpakning 80")
@@ -501,7 +610,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         requested.fill("17")
         requested.press("Enter")
         expect(page.get_by_text("Viser 17 af 17 ønskede kandidater", exact=False)).to_be_visible()
-        expect(selector).to_have_value("000080 · Eksempelpakning 80")
+        expect(selector).to_have_value("")
         expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value(
             "=Syntetisk gennemgang"
         )
@@ -512,6 +621,21 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         search.fill("000080")
         search.press("Enter")
         expect(page.get_by_text("Ingen produkter i denne visning", exact=False)).to_be_visible()
+        search.fill("000002")
+        search.press("Enter")
+        expect(page.get_by_text("1 synlige efter søgning og filtre.", exact=False)).to_be_visible()
+        _settled(page)
+        _keyboard_picker(page)
+        selector.evaluate("e => e.scrollIntoView({block:'center', behavior:'instant'})")
+        page.get_by_test_id("stSelectbox").filter(has=selector).get_by_role(
+            "button", name="Open", exact=True
+        ).click()
+        expect(page.get_by_role("option")).to_have_count(1)
+        expect(page.get_by_role("option")).to_have_text("000002 · Eksempelpakning 2")
+        page.keyboard.press("Escape")
+        expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value(
+            "=Syntetisk gennemgang"
+        )
         search.fill("")
         search.press("Enter")
         _select(page, "Hvilke kandidater vil du se?", "Alle prioriterbare")
@@ -519,9 +643,9 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         _settled(page)
         page.get_by_text("Seneste 26 perioder", exact=True).click()
         expect(page.get_by_role("radio", name="Seneste 26 perioder", exact=True)).to_be_checked()
-        page.get_by_text("Flere alternativer og grafvalg", exact=True).click()
+        page.get_by_text("Flere grafvalg", exact=True).click()
         page.get_by_text("Vis også priser efter den valgte periode", exact=True).click()
-        _select(page, "Valgt kandidat — søg på navn eller varenummer", "000001")
+        _select(page, "Kandidat i den viste liste", "000001")
         expect(
             page.get_by_test_id("stText").filter(
                 has_text=re.compile(r"^000001 · Eksempelpakning 1$")
@@ -532,30 +656,21 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             "return p && p.data[0].meta==='000001' && p.data[0].x.length===26}"
         )
         _settled(page)
-        page.get_by_text("Alle 7 varer i gruppen / flere kurver", exact=True).click()
-        _settled(page)
-        overlay = page.get_by_role(
-            "combobox", name="Vis fundne gruppealternativer i grafen (højst 5)"
-        )
-        overlay.click()
-        overlay.fill("900001")
-        page.get_by_role(
-            "option", name="900001 · Opbevaringsfravalgt alternativ", exact=True
-        ).click()
-        page.keyboard.press("Escape")
+        _toggle_alternative(page, "900001")
         expect(page.locator('[data-testid="stPlotlyChart"]').first).to_be_visible()
         page.wait_for_function(
             "() => {const p=document.querySelector('.js-plotly-plot');"
             "return p && p.data.length===2 && p.data[0].x.length===26 "
             "&& p.data[1].meta==='900001'}"
         )
+        page.get_by_text("Gruppedetaljer · 7 fundne varer", exact=True).click()
         expect(
-            page.get_by_text("Gruppefuldstændighed er ikke verificeret", exact=False)
+            page.get_by_text("Gruppefuldstændighed er ikke verificeret", exact=False).last
         ).to_be_visible()
         expect(
             page.locator(".st-key-price_workspace").get_by_test_id("stDataFrame").first
         ).to_be_visible()
-        page.get_by_text("Alle 7 varer i gruppen / flere kurver", exact=True).click()
+        page.get_by_text("Gruppedetaljer · 7 fundne varer", exact=True).click()
         _select(page, "Hvilke kandidater vil du se?", "Prioriteret liste")
         requested.fill("80")
         requested.press("Enter")
@@ -589,16 +704,16 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             "() => {const p=document.querySelector('.js-plotly-plot');"
             "return p && p.data.length===2 && p.data[1].meta==='900001'}"
         )
-        _select(page, "Valgt kandidat — søg på navn eller varenummer", "000080")
+        _select(page, "Kandidat i den viste liste", "000080")
         expect(note).to_have_value("=Syntetisk gennemgang")
-        _select(page, "Valgt kandidat — søg på navn eller varenummer", "000001")
+        _select(page, "Kandidat i den viste liste", "000001")
         expect(note).to_have_value("")
         page.wait_for_function(
             "() => {const p=document.querySelector('.js-plotly-plot');"
             "return p && p.data.length===2 && p.data[0].meta==='000001' "
             "&& p.data[1].meta==='900001'}"
         )
-        _stacked_layout_evidence(page, tmp_path)
+        _linked_layout_evidence(page, tmp_path)
         for size, width, height in (("laptop", 1366, 768), ("desktop", 1920, 1080)):
             page.set_viewport_size({"width": width, "height": height})
             for section, heading in (
@@ -634,7 +749,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         _settled(page)
         page.get_by_role("button", name="Anvend indstillinger", exact=True).click()
         expect(page.get_by_text("tidligere, sammenhængende analyse", exact=False)).to_be_visible()
-        _select(page, "Valgt kandidat — søg på navn eller varenummer", "000080")
+        _select(page, "Kandidat i den viste liste", "000080")
         expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value(
             "=Syntetisk gennemgang"
         )
@@ -657,9 +772,9 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             isolated.get_by_role("textbox", name="Note", exact=True).fill("Anden session")
             isolated.get_by_role("button", name="Gem vurdering", exact=True).click()
             expect(isolated.get_by_text("Vurderingen er gemt", exact=False)).to_be_visible()
-            _select(page, "Valgt kandidat — søg på navn eller varenummer", "000001")
+            _select(page, "Kandidat i den viste liste", "000001")
             expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value("")
-            _select(page, "Valgt kandidat — søg på navn eller varenummer", "000080")
+            _select(page, "Kandidat i den viste liste", "000080")
             expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value(
                 "=Syntetisk gennemgang"
             )

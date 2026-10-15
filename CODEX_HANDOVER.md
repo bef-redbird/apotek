@@ -460,14 +460,14 @@ Compact filter/data rail  | Candidate list       | Selected product
                          |                       | evidence / warnings / note
 ```
 
-Avoid nested scroll boxes where possible. The implemented workspace uses three
-numbered, full-width sections: candidate selection, price comparison and assessment.
-The earlier 40/60 split made descriptions and charts too narrow in actual use.
-Keep the candidate table open above the detail section, with a searchable selector
-and previous/next controls beside the selected medicine. This trades simultaneous
-list/chart visibility for readable names and curves; it does not navigate to a new
-product page. Use native bordered containers and a 520-pixel chart, with no custom
-DOM styling. At narrow widths, controls wrap or stack.
+Avoid nested scroll boxes where possible. The candidate list sits on the left and
+the selected candidate's price comparison on the right, followed by a full-width
+assessment section. Keep the four-column table readable at laptop widths and give
+the chart the wider share of the workspace. Selecting a table row drives the chart;
+the keyboard fallback stays with the list and offers only its visible candidates.
+Previous/next controls beside the selected medicine follow that same list. Use
+native bordered containers and a 520-pixel chart, with no custom DOM styling.
+At narrow widths, the list and price comparison stack and controls wrap.
 
 ### 7.3 Import and data status
 
@@ -492,14 +492,21 @@ Include “Antal kandidater” and an all-rankable mode near the queue; keep the
 
 The decision workspace uses four queue columns: canonical rank, product ID,
 optional descriptive label and current cost. Names, strength, form, pack and company
-are optional display metadata, never calculation requirements. Searchable selectors
-show labels plus stable IDs. Review status can filter the list; codes, current AIP,
+are optional display metadata, never calculation requirements. The table-side keyboard
+fallback shows only the visible filtered rows, with labels plus stable IDs. The price
+panel has no independent candidate lookup. Review status can filter the list; codes, current AIP,
 own historical median and price gap belong in the detail panel. Native table sorts
 remain independent of previous/next navigation, which follows the visible filtered
 canonical sequence. An outside-list selection disables that sequence navigation.
 
-Price evidence and alternative selection share the full-width comparison section.
-The assessment is always visible below it, without switching tabs. Every found valid
+The candidate table sits on the left and price evidence on the right at laptop and
+desktop widths; the panels stack on narrow screens. One checklist beneath the chart
+shows only the selected candidate's found snapshot group alternatives. Checked items
+add curves without changing the review owner. Up to five can be checked; other choices
+are disabled at the limit, while checked items can always be removed. The first three
+alternatives are visible immediately; remaining members are in a disclosure. Missing
+history remains visible as a disabled curve choice with an explanation and group details.
+The assessment is always visible below both panels, without switching tabs. Every found valid
 snapshot group member can be inspected; opening an alternative as the active candidate
 is explicit and offered only for eligible candidates. Comparison never changes the
 review owner or eligibility. Different line styles and marker shapes supplement chart
@@ -509,10 +516,10 @@ The existing calculation/parser method versions and JSON schema stay unchanged;
 optional descriptive labels do not alter numeric parsing, ranking or analysis identity.
 
 Use plain task labels: **Prioriteret liste**, **Valgt kandidat**, **Forrige kandidat**,
-**Næste kandidat**, **Vurder dette alternativ** and **Gem og næste kandidat**.
+**Næste kandidat**, **Vurder alternativ [varenr.]** and **Gem og næste kandidat**.
 The editable count is enabled for the prioritized list and retained while other
 views are selected. Show a candidate's priority reason near its prices. Chart range
-is visible; extra overlays, group details and retrospective options are secondary.
+is visible; group details and retrospective options are secondary.
 
 Selecting a row is not the same as marking it for export. Use an explicit saved selection/review control. Keep current inspection, export selection and review status separate.
 
