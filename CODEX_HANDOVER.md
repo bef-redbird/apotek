@@ -27,11 +27,20 @@ The first implementation retains the reference eligibility and
 `historical-priority-v1` definitions. Temporary workspaces use typed per-session
 memory and versioned JSON restoration; DuckDB/durable storage remain deferred.
 The supplied original Cito file is genuine BIFF `.xls` with a differently named
-sheet. Parser `excel-v2-biff` therefore additionally accepts a legacy workbook
+sheet. Parser `excel-v3-period-conflicts` therefore additionally accepts a legacy workbook
 with exactly one sheet whose first row has all six unambiguous required headers.
 It rejects required-cell formulas, encryption and macro content. The XLSX `Table`
 contract and LMS data-sheet/AIP contract are unchanged. No originals are converted
 or rewritten. Synthetic XLSX/BIFF tests cover this departure independently.
+
+Parser v3 records duplicate AIP ambiguity per period, preserves unaffected prices
+and blocks ranking only for conflicts inside the applied decision-time window.
+Optional LMS metadata outside the date block is ignored; malformed date-like
+headings and unknown headings inside the date block remain import errors.
+Known group IDs survive invalid product rows so group incompleteness stays visible.
+Successful analysis replacement retains queue preferences while clearing judgments.
+JSON generation and restore share the 2 MiB/25,000-review bounds; oversized copies
+are not offered, and Excel export remains available without promising JSON restore.
 
 Threshold classification uses exact integer-ratio cross multiplication, including
 mid-rank percentiles; display ratios do not decide boundary membership. Duplicate

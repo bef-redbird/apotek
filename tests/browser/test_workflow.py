@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -92,6 +93,10 @@ def _select(page: Page, label: str, value: str) -> None:
         control.fill(value)
     page.get_by_role("option", name=value, exact=True).click()
     expect(control).to_have_value(value)
+    if label == "Vælg varenr. (alle kandidater)":
+        # The selector updates locally before Streamlit starts its rerun. Wait
+        # for the server-rendered detail before accepting its idle signal.
+        expect(page.get_by_text(re.compile(rf"^{re.escape(value)} · "))).to_be_visible()
     _settled(page)
 
 

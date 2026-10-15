@@ -61,7 +61,7 @@ requested window and minimum observation count are required. Prices after the
 declared period never enter its features or default chart.
 
 Cito `.xlsx` requires `Table`; only the six named business fields matter. The
-supplied original is BIFF `.xls`, so parser `excel-v2-biff` also supports exactly
+supplied original is BIFF `.xls`, so parser `excel-v3-period-conflicts` also supports exactly
 one legacy sheet whose first row contains all six unambiguous headers, regardless
 of its name. It inspects BIFF formula, encryption and macro records before
 reading values; required formulas demand a values-only export. XLSX retains its
@@ -75,6 +75,15 @@ conflicts remove the product from calculation and flag affected group context.
 Blank storage is retained as unspecified; blank classifications never pass the
 candidate filter. Missing groups never join each other. Optional names are display
 labels only.
+
+Optional LMS metadata before or after the date block is ignored. Unknown/blank
+headings inside that block and malformed date-like headings remain errors;
+recognised reference fields may be reordered between dates. Conflicting duplicate
+AIP observations become explicit gaps only at the affected periods. A conflict
+blocks ranking only inside the applied history window at or before the confirmed
+period; future or older out-of-window conflicts cannot change that ranking.
+Parser v3 changes analysis identity, so backups from older parser versions require
+their original application revision and are not silently carried forward.
 
 Numeric Excel prices are converted with `Decimal(str(value))` to integer øre.
 At most `1e-7` øre of serialization noise is accepted. Danish text prices accept

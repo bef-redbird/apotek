@@ -33,7 +33,7 @@ FLAG_TEXT = {
     "short_window": "Det ønskede historikvindue er ikke tilgængeligt.",
     "few_prices": "For få gyldige priser i historikvinduet.",
     "unaligned_period": "Den valgte periode findes ikke i priskalenderen.",
-    "history_conflict": "Modstridende historik kræver afklaring.",
+    "history_conflict": "Modstridende historik i analysevinduet kræver afklaring.",
 }
 
 
@@ -70,13 +70,16 @@ def build_analysis(
     items = [v for v in items if v.current_cost_ore < 100000]
     counts["Efter kostpris < 1.000 kr."] = len(items)
     counts["Kandidatgrupper"] = len({v.group_id for v in items if v.group_id is not None})
+    analysis_periods = set(
+        [p for p in history.periods if p <= context.current_period][-settings.lookback_periods :]
+    )
     candidates: dict[str, Candidate] = {}
     for item in items:
         features = calculate_features(history, item.product_id, context.current_period, settings)
         flags = []
         if context.current_period not in history.periods:
             flags.append("unaligned_period")
-        if item.product_id in history.conflicted_ids:
+        if analysis_periods.intersection(history.conflicted_periods.get(item.product_id, ())):
             flags.append("history_conflict")
         if features.current_aip_ore is None:
             flags.append("missing_current_aip")

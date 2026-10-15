@@ -17,6 +17,7 @@ from bef_redbird.domain import (
     CitoSnapshot,
     Features,
     HistoryDataset,
+    QueueSettings,
     Review,
     ReviewState,
     SourceInfo,
@@ -126,6 +127,28 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     assert any("Alle 120 prioriterbare" in item.value for item in app.caption)
     app.selectbox(key=f"queue_mode_{aid}").select("Alle kandidater").run()
     assert app.session_state["review"].queue.mode == "all_rankable"
+    app.selectbox(key=f"product_{aid}").select("000001").run()
+    assert app.text_area(key=f"review_note_{aid}_000001").value == ""
+    app.selectbox(key=f"product_{aid}").select("000080").run()
+    assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar min note"
+    assert app.selectbox(key=f"review_status_{aid}_000080").value == "Interessant"
+    assert not app.exception
+
+
+def test_native_detail_tab_state_survives_queue_changes() -> None:
+    app = loaded_app()
+    aid = "synthetic-analysis"
+    tab_key = f"detail_tabs_{aid}"
+    assert app.session_state[tab_key] == "Prishistorik"
+    # AppTest exposes native tab state but has no tab-click helper.
+    app.session_state[tab_key] = "Vurdering"
+    app.run()
+    app.number_input(key=f"queue_n_{aid}").set_value(80).run()
+    assert app.session_state[tab_key] == "Vurdering"
+    app.number_input(key=f"queue_n_{aid}").set_value(17).run()
+    assert app.session_state[tab_key] == "Vurdering"
+    app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
+    assert app.session_state[tab_key] == "Vurdering"
     assert not app.exception
 
 
@@ -151,6 +174,133 @@ def test_failed_change_retains_coherent_analysis_and_reviews() -> None:
     assert app.session_state["analysis"].context.current_period == date(2026, 2, 16)
     assert app.session_state["review"].reviews["000001"].note == "Gem"
     assert any("tidligere, sammenhængende analyse" in item.value for item in app.warning)
+    assert not app.exception
+
+
+@pytest.mark.parametrize("change", ["period", "method"])
+@pytest.mark.parametrize(
+    "queue", [QueueSettings(top_n=17), QueueSettings(top_n=80), QueueSettings("all_rankable", 80)]
+)
+def test_replacement_preserves_queue_and_clears_analysis_bound_state(
+    monkeypatch: pytest.MonkeyPatch, change: str, queue: QueueSettings
+) -> None:
+    analysis = synthetic_analysis()
+    app = loaded_app(analysis)
+    aid = analysis.analysis_id
+    app.number_input(key=f"queue_n_{aid}").set_value(queue.top_n).run()
+    if queue.mode == "all_rankable":
+        app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
+    app.selectbox(key=f"product_{aid}").select("000080").run()
+    app.text_area(key=f"review_note_{aid}_000080").input("Gammel periodes note")
+    app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
+    app.checkbox(key=f"review_selected_{aid}_000080").check()
+    next(b for b in app.button if b.label == "Gem vurdering").click().run()
+    app.button(key="prepare_excel").click().run()
+    assert "prepared_export" in app.session_state
+
+    def replacement(
+        snapshot: CitoSnapshot,
+        history: HistoryDataset,
+        context: AnalysisContext,
+        settings: AnalysisSettings,
+    ) -> AnalysisResult:
+        return replace(
+            analysis, analysis_id="replacement-analysis", context=context, settings=settings
+        )
+
+    monkeypatch.setattr("bef_redbird.service.build_analysis", replacement)
+    if change == "period":
+        app.date_input[0].set_value(date(2026, 3, 2))
+    else:
+        app.date_input[0].set_value(analysis.context.current_period)
+        next(n for n in app.number_input if n.label == "Historikvindue (perioder)").set_value(30)
+    app.checkbox(key="replace_ack").check()
+    next(b for b in app.button if b.label == "Anvend indstillinger").click().run()
+
+    new_aid = "replacement-analysis"
+    review = app.session_state["review"]
+    assert review.analysis_id == new_aid
+    assert review.queue == queue
+    assert review.reviews == {}
+    assert review.selected_ids == set()
+    assert review.inspected_id == "000001"
+    assert app.number_input(key=f"queue_n_{new_aid}").value == queue.top_n
+    expected_mode = "Alle prioriterbare" if queue.mode == "all_rankable" else "Top N"
+    assert app.selectbox(key=f"queue_mode_{new_aid}").value == expected_mode
+    assert app.text_area(key=f"review_note_{new_aid}_000001").value == ""
+    assert not app.checkbox(key=f"review_selected_{new_aid}_000001").value
+    assert "prepared_export" not in app.session_state
+    for key in (
+        f"queue_n_{aid}",
+        f"queue_mode_{aid}",
+        f"product_{aid}",
+        f"review_note_{aid}_000080",
+        f"review_status_{aid}_000080",
+        f"review_selected_{aid}_000080",
+        f"overlay_{aid}_000080",
+        f"detail_tabs_{aid}",
+    ):
+        assert key not in app.session_state
+    assert not app.checkbox(key="replace_ack").value
+    assert not app.exception
+
+
+def test_failed_replacement_preserves_queue_and_analysis_bound_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bef_redbird.domain import DataError
+
+    app = loaded_app()
+    aid = "synthetic-analysis"
+    review = ReviewState(
+        aid,
+        QueueSettings("all_rankable", 80),
+        {"000080": Review("Interessant", "Bevar alt")},
+        {"000080"},
+        "000080",
+    )
+    app.session_state["review"] = review
+    app.session_state["sync_review_widgets"] = True
+    app.run()
+    app.button(key="prepare_excel").click().run()
+    prepared = app.session_state["prepared_export"]
+
+    def failed(*args: object, **kwargs: object) -> None:
+        raise DataError("Syntetisk afvist erstatning")
+
+    monkeypatch.setattr("bef_redbird.service.build_analysis", failed)
+    app.date_input[0].set_value(date(2026, 3, 2))
+    app.checkbox(key="replace_ack").check()
+    next(b for b in app.button if b.label == "Anvend indstillinger").click().run()
+    assert app.session_state["analysis"].analysis_id == aid
+    assert app.session_state["review"] == review
+    assert app.session_state["prepared_export"] == prepared
+    assert app.number_input(key=f"queue_n_{aid}").value == 80
+    assert app.selectbox(key=f"queue_mode_{aid}").value == "Alle prioriterbare"
+    assert app.selectbox(key=f"product_{aid}").value == "000080"
+    assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar alt"
+    assert any("Syntetisk afvist" in item.value for item in app.error)
+    assert not app.exception
+
+
+def test_oversized_session_backup_keeps_excel_and_restore_available() -> None:
+    analysis = synthetic_analysis(180)
+    app = loaded_app(analysis)
+    review = ReviewState(
+        analysis.analysis_id,
+        reviews={pid: Review("Interessant", "漢" * 4000) for pid in analysis.candidates},
+    )
+    app.session_state["review"] = review
+    app.run()
+    assert any("2 MB" in item.value for item in app.error)
+    assert any(item.label == "Gendan sessionskopi (JSON)" for item in app.get("file_uploader"))
+    assert any(button.label == "Gendan vurderinger" for button in app.button)
+    assert not any(item.label == "Hent sessionskopi (JSON)" for item in app.get("download_button"))
+    app.button(key="prepare_excel").click().run()
+    assert any(item.label == "Hent Excel" for item in app.get("download_button"))
+    assert app.session_state["review"] == review
+    app.number_input(key=f"queue_n_{analysis.analysis_id}").set_value(17).run()
+    assert not any(item.label == "Hent Excel" for item in app.get("download_button"))
     assert not app.exception
 
 

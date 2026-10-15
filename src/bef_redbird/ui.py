@@ -64,9 +64,12 @@ def _review(analysis: AnalysisResult) -> ReviewState:
     return current
 
 
-def _reset_view_widgets() -> None:
+def _reset_view_widgets(*, replacing_analysis: bool = False) -> None:
+    prefixes: tuple[str, ...] = ("product_", "review_", "queue_", "table_")
+    if replacing_analysis:
+        prefixes += ("overlay_", "detail_tabs_")
     for key in list(st.session_state):
-        if str(key).startswith(("product_", "review_", "queue_", "table_")):
+        if str(key).startswith(prefixes):
             del st.session_state[key]
 
 
@@ -162,11 +165,13 @@ def _inputs() -> None:
                             dataset = parse_lms_history(history.getvalue(), history.name)
                         result = build_analysis(snapshot, dataset, context, settings)
                     st.session_state["analysis"] = result
-                    st.session_state["review"] = ReviewState(result.analysis_id)
+                    st.session_state["review"] = ReviewState(
+                        result.analysis_id, queue=review.queue if review else QueueSettings()
+                    )
                     st.session_state.pop("import_error", None)
                     st.session_state["reset_ack"] = True
                     st.session_state.pop("prepared_export", None)
-                    _reset_view_widgets()
+                    _reset_view_widgets(replacing_analysis=True)
                     st.rerun()
             except DataError as exc:
                 st.session_state["import_error"] = str(exc)
@@ -456,7 +461,9 @@ def _detail(analysis: AnalysisResult, review: ReviewState) -> None:
         if item.product_id != product_id and item.product_id in analysis.history.prices
     ]
     history_tab, alternatives_tab, review_tab = st.tabs(
-        ["Prishistorik", "Alternativer", "Vurdering"], key=f"detail_tabs_{analysis.analysis_id}"
+        ["Prishistorik", "Alternativer", "Vurdering"],
+        key=f"detail_tabs_{analysis.analysis_id}",
+        on_change="rerun",
     )
     with history_tab:
         with st.expander("Grafvisning"):
@@ -638,33 +645,43 @@ def _exports(analysis: AnalysisResult, review: ReviewState) -> None:
     st.caption(f"{count} produkter i eksporten. Tabelsortering og søgning ændrer ikke omfanget.")
     if count:
         filename = f"redbird_{analysis.context.current_period}_{scope}_{count}.xlsx"
+        signature = (
+            analysis.analysis_id,
+            scope,
+            review.queue,
+            tuple(sorted(review.reviews.items())),
+            frozenset(review.selected_ids),
+            review.inspected_id,
+        )
         if st.button("Klargør Excel", key="prepare_excel"):
             st.session_state["prepared_export"] = (
-                analysis.analysis_id,
-                scope,
-                dump_session(analysis, review),
+                signature,
                 export_analysis(analysis, review, scope),
                 filename,
             )
         prepared = st.session_state.get("prepared_export")
-        signature = (analysis.analysis_id, scope, dump_session(analysis, review))
-        if prepared and prepared[:3] == signature:
+        if prepared and prepared[0] == signature:
             st.download_button(
                 "Hent Excel",
-                prepared[3],
-                prepared[4],
+                prepared[1],
+                prepared[2],
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 on_click="ignore",
             )
     else:
         st.info("Der er ingen produkter i det valgte eksportomfang.")
-    st.download_button(
-        "Hent sessionskopi (JSON)",
-        dump_session(analysis, review),
-        f"redbird_session_{analysis.context.current_period}.json",
-        "application/json",
-        on_click="ignore",
-    )
+    try:
+        session_data = dump_session(analysis, review)
+    except DataError as exc:
+        st.error(str(exc))
+    else:
+        st.download_button(
+            "Hent sessionskopi (JSON)",
+            session_data,
+            f"redbird_session_{analysis.context.current_period}.json",
+            "application/json",
+            on_click="ignore",
+        )
     session = st.file_uploader("Gendan sessionskopi (JSON)", type=["json"], key="session_upload")
     if st.button("Gendan vurderinger", disabled=session is None):
         try:

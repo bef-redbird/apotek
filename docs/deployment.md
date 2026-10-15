@@ -68,7 +68,10 @@ There is no forensic-erasure claim for process memory or provider disks.
 The app accepts up to 128 MiB per file, at most 1 GiB total uncompressed XLSX ZIP
 members, 5,000 ZIP members, 250,000 worksheet rows, 600 columns and 25 million
 selected-sheet cells. It does not extract archive paths or follow workbook links.
-Review notes are limited to 4,000 characters; review JSON to 2 MiB; overlays to
+Review notes are limited to 4,000 characters; review JSON to 2 MiB and 25,000
+reviews in both export and restore. An oversized JSON copy is not offered for
+download: reviews remain intact and Excel export stays available, but Excel
+cannot restore the application session. Overlays are limited to
 five found alternatives. N has a technical bound of one billion without allocation
 proportional to N; all-rankable remains available. None of these limits silently
 truncate analytic history. A limit violation is an explicit failed import.

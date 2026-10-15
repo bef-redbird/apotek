@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
-PARSER_VERSION = "excel-v2-biff"
+PARSER_VERSION = "excel-v3-period-conflicts"
 FEATURE_VERSION = "price-history-v1"
 RANKING_VERSION = "historical-priority-v1"
 SCHEMA_VERSION = 1
@@ -87,6 +87,8 @@ class HistoryDataset:
     source_rows: dict[str, tuple[int, ...]]
     issues: list[Issue]
     conflicted_ids: set[str] = field(default_factory=set)
+    # Ambiguity belongs to observations, not to the product's entire timeline.
+    conflicted_periods: dict[str, set[date]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

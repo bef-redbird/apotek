@@ -19,6 +19,9 @@ from bef_redbird.domain import (
     select_queue,
 )
 
+MAX_SESSION_BYTES = 2 * 1024 * 1024
+MAX_SESSION_REVIEWS = 25_000
+
 LIMITATIONS = (
     "Prioritering til gennemgang — ikke dokumenteret købsgevinst.",
     "Fundne alternativer i rapporten; gruppens fuldstændighed er ikke verificeret.",
@@ -45,10 +48,17 @@ def _match(analysis: AnalysisResult, state: ReviewState) -> None:
         raise DataError("Vurderinger tilhører en anden analyse.")
     if not (set(state.reviews) | state.selected_ids) <= analysis.snapshot.items.keys():
         raise DataError("Vurderinger indeholder ukendte produkter.")
+    if state.inspected_id is not None and state.inspected_id not in analysis.snapshot.items:
+        raise DataError("Ukendt vist produkt.")
 
 
 def dump_session(analysis: AnalysisResult, state: ReviewState) -> bytes:
     _match(analysis, state)
+    if len(state.reviews) > MAX_SESSION_REVIEWS:
+        raise DataError(
+            "JSON-sikkerhedskopien overstiger 25.000 vurderinger. "
+            "Eksportér vurderingerne til Excel."
+        )
     payload = {
         "session_schema": 1,
         "analysis_id": analysis.analysis_id,
@@ -61,11 +71,17 @@ def dump_session(analysis: AnalysisResult, state: ReviewState) -> bytes:
         "selected_ids": sorted(state.selected_ids),
         "inspected_id": state.inspected_id,
     }
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False).encode("utf-8")
+    data = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False).encode("utf-8")
+    if len(data) > MAX_SESSION_BYTES:
+        raise DataError(
+            "JSON-sikkerhedskopien overstiger 2 MB. "
+            "Eksportér vurderingerne til Excel, eller forkort noter, før du prøver igen."
+        )
+    return data
 
 
 def restore_session(data: bytes, analysis: AnalysisResult) -> ReviewState:
-    if len(data) > 2 * 1024 * 1024:
+    if len(data) > MAX_SESSION_BYTES:
         raise DataError("Vurderingsfilen overstiger 2 MB.")
     try:
         payload = json.loads(data)
@@ -90,7 +106,10 @@ def restore_session(data: bytes, analysis: AnalysisResult) -> ReviewState:
         if set(payload) != set(expected):
             raise DataError("Vurderingsfilens felter er ugyldige.")
         queue = QueueSettings(**payload["queue"])
-        if not isinstance(payload["reviews"], dict) or len(payload["reviews"]) > 25000:
+        if (
+            not isinstance(payload["reviews"], dict)
+            or len(payload["reviews"]) > MAX_SESSION_REVIEWS
+        ):
             raise DataError("Ugyldig vurderingssamling.")
         reviews = {pid: Review(**value) for pid, value in payload["reviews"].items()}
         selected = payload["selected_ids"]

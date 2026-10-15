@@ -267,7 +267,7 @@ def test_lms_only_exact_aip_rows_date_order_and_missingness() -> None:
     assert {issue.code for issue in parsed.issues} == {"invalid_aip", "zero_aip"}
 
 
-def test_lms_duplicate_identical_aip_preserves_provenance_and_conflict_is_removed() -> None:
+def test_lms_duplicates_preserve_provenance_and_only_ambiguous_observations_are_removed() -> None:
     data = xlsx_bytes(
         HISTORY_HEADERS,
         [
@@ -279,17 +279,21 @@ def test_lms_duplicate_identical_aip_preserves_provenance_and_conflict_is_remove
         sheet="Medicinpriser data",
     )
     parsed = parse_lms_history(data)
-    assert parsed.prices == {"000123": (10000, 12000, 11800)}
+    assert parsed.prices == {
+        "000123": (10000, 12000, 11800),
+        "000124": (10000, None, 11800),
+    }
     assert parsed.source_rows["000123"] == (2, 3)
     assert parsed.conflicted_ids == {"000124"}
+    assert parsed.conflicted_periods == {"000124": {date(2026, 1, 19)}}
     assert any(issue.code == "history_conflict" for issue in parsed.issues)
 
 
 @pytest.mark.parametrize("header", ["20260230", "not a date", "2026-01-05", "20260105"])
 def test_lms_bad_or_duplicate_date_header_blocks(header: str) -> None:
-    headers = ["Varenummer", "Indikator", "20260105", header]
+    headers = ["Varenummer", "Indikator", "20260105", header, "20260202"]
     with pytest.raises(DataError):
-        parse_lms_history(xlsx_bytes(headers, [[123, "AIP", 1, 2]], "Medicinpriser data"))
+        parse_lms_history(xlsx_bytes(headers, [[123, "AIP", 1, 2, 3]], "Medicinpriser data"))
 
 
 @pytest.mark.parametrize("field", [0, 1, 2])

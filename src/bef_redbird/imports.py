@@ -234,10 +234,14 @@ def parse_cito(data: bytes, name: str = "cito.xlsx") -> CitoSnapshot:
         count += 1
         pid: str | None = None
         gid: str | None = None
+        group_valid = True
+        try:
+            gid = group_id(values[5])
+        except DataError:
+            group_valid = False
         try:
             pid = product_id(values[0])
-            gid = group_id(values[5])
-            if "#INVALID_CELL" in values:
+            if not group_valid or "#INVALID_CELL" in values:
                 raise DataError("Excel-fejl i påkrævede Cito-felter.")
             storage = str(values[1] or "").strip().upper()
             cost = price_ore(values[2])
@@ -309,6 +313,8 @@ def _period(value: Any) -> date | None:
             return datetime.strptime(text, "%Y%m%d").date()
         except ValueError as exc:
             raise DataError("Ugyldig datooverskrift i LMS-arket.") from exc
+    if re.match(r"^[0-9]{4}[-/.][0-9]", text) or re.fullmatch(r"[0-9]{6,}", text):
+        raise DataError("Datooverskrifter skal være Excel-datoer eller YYYYMMDD.")
     return None
 
 
@@ -320,6 +326,7 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
     labels: dict[str, str] = {}
     source_rows: dict[str, tuple[int, ...]] = {}
     conflicts: set[str] = set()
+    conflicted_periods: dict[str, set[date]] = {}
     try:
         if "Medicinpriser data" not in book.sheetnames:
             raise DataError("LMS-filen mangler arket Medicinpriser data.")
@@ -345,10 +352,16 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
                 if d in dates:
                     raise DataError("Gentagne datooverskrifter er tvetydige; ret eksporten.")
                 dates[d] = col
-            elif cell.value is not None and normal_header(cell.value) not in known:
-                raise DataError("Ukendt dato- eller metadataoverskrift i LMS-arket.")
         if not dates:
             raise DataError("Ingen prisperioder fundet i LMS-arket.")
+        # Unknown reference columns outside the date block are optional metadata.
+        # Inside it, a blank/unknown heading could hide an observation; reject it.
+        # Known reference fields remain reorderable, even between date columns.
+        first_date_col, last_date_col = min(dates.values()), max(dates.values())
+        date_cols = set(dates.values())
+        for col in range(first_date_col, last_date_col + 1):
+            if col not in date_cols and normal_header(values[col]) not in known:
+                raise DataError("Ugyldig overskrift i LMS-arkets datokolonner.")
         periods = tuple(sorted(dates))
         for first, second in zip(periods, periods[1:], strict=False):
             if (second - first).days != 14:
@@ -413,17 +426,28 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
                         )
                     )
             converted = tuple(series)
-            if pid in prices and prices[pid] != converted:
-                conflicts.add(pid)
-                issues.append(
-                    Issue(
-                        "history_conflict",
-                        "Modstridende AIP-rækker; historikken er uafklaret.",
-                        "unranked",
-                        pid,
-                        rowno,
+            if pid in prices:
+                ambiguous = conflicted_periods.get(pid, set())
+                for period, old, new in zip(periods, prices[pid], converted, strict=True):
+                    if old != new and period not in ambiguous:
+                        ambiguous.add(period)
+                        issues.append(
+                            Issue(
+                                "history_conflict",
+                                "Modstridende AIP i perioden; observationen er udeladt.",
+                                "warning",
+                                pid,
+                                rowno,
+                                period.isoformat(),
+                            )
+                        )
+                if ambiguous:
+                    conflicts.add(pid)
+                    conflicted_periods[pid] = ambiguous
+                    prices[pid] = tuple(
+                        None if period in ambiguous else value
+                        for period, value in zip(periods, prices[pid], strict=True)
                     )
-                )
             else:
                 prices[pid] = converted
             source_rows[pid] = (*source_rows.get(pid, ()), rowno)
@@ -433,8 +457,8 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
                     labels[pid] = str(label.value or "")[:200]
             if len(issues) > 10000:
                 raise DataError("For mange ugyldige AIP-værdier; kontroller LMS-eksporten.")
-        for pid in conflicts:
-            prices.pop(pid, None)
-        return HistoryDataset(source, periods, prices, labels, source_rows, issues, conflicts)
+        return HistoryDataset(
+            source, periods, prices, labels, source_rows, issues, conflicts, conflicted_periods
+        )
     finally:
         book.close()
