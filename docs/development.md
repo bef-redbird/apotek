@@ -46,6 +46,28 @@ inspect every staged diff and never use the guard as permission to upload data.
 Authored configuration, Markdown and small synthetic fixture recipes are allowed.
 Intentional new artifact types require a reviewed narrow policy change.
 
+## Reviewing application changes
+
+For import, calculation, ranking or export changes, read the affected contract in
+[calculations.md](calculations.md). Write independently expected examples before
+changing semantics: integer-ore boundaries, missing calendar slots, exact 5% rises
+and observable reversal denominators. Verify both supported source formats without
+requiring optional fields. Test future-data exclusion and deterministic full ranking
+separately from queue slicing. Compare Excel readback with the same `AnalysisResult`;
+test formula injection and matching-only JSON restore. Version changed method
+definitions and update their tests and explanations together. Authorised originals
+remain read-only external fixtures; report unavailable private evidence explicitly.
+
+For UI changes, retain the linked selection and review-state guarantees described
+in [the review workflow](../README.md#review-a-report). Use native accessible controls
+and restrained styling. Exercise N above and below 50, all-rankable, sorting, search,
+selection and resizing with saved reviews. Inspect empty, failed-import, short-history
+and missing-data states. Check chart gaps, period labels and unfiltered found group
+alternatives. Run Streamlit AppTest and real-browser upload/download checks; inspect
+synthetic screenshots at laptop and desktop widths outside Git.
+
+## Pull requests and acceptance
+
 Before a PR, inspect origin, status, staged and unstaged diffs, branch and worktrees.
 Run the relevant checks and record factual results in the PR template. Explain
 material method changes, data impact and any migration/rollback. Do not self-approve
