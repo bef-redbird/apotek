@@ -102,6 +102,19 @@ def _keyboard_picker(page: Page) -> None:
     )
     if details.get_attribute("open") is None:
         details.locator("summary").click()
+    # Native details animation continues after Streamlit reports render quiescence.
+    # Opening the combobox during that animation can immediately dismiss its popover.
+    details.evaluate("""element => new Promise(resolve => {
+        let previous = -1, stable = 0;
+        function check() {
+            const height = element.getBoundingClientRect().height;
+            stable = Math.abs(height - previous) < 0.1 ? stable + 1 : 0;
+            previous = height;
+            if (stable >= 8) resolve(true);
+            else requestAnimationFrame(check);
+        }
+        requestAnimationFrame(check);
+    })""")
 
 
 def _alternative(page: Page, product_id: str) -> Locator:
