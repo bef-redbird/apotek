@@ -43,8 +43,10 @@ catboost_info/
 .env.*
 !.env.example
 .streamlit/secrets.toml
-.codex/config.toml
-.codex/history*
-.codex/sessions/
+# Local coding-agent instructions and configuration
+AGENTS.md
+CODEX_HANDOVER.md
+.agents/
+.codex/
 .DS_Store
 Thumbs.db

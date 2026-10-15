@@ -1,4 +1,4 @@
-# bef-redbird
+# Apotek
 
 A Danish browser workspace for pharmaceutical procurement **review**. Import a
 Cito snapshot and LMS price history, confirm the report period, investigate a
@@ -80,7 +80,8 @@ approved private storage outside this checkout.
 
 ## Input and calculation policies
 
-`CODEX_HANDOVER.md` is the maintained specification. The implementation retains
+[Calculation and data contracts](docs/calculations.md) describe the implemented
+rules and their boundaries. The implementation retains
 `historical-priority-v1`: low historical price position and repeated rises define
 tiers; ties use median distance descending, percentile ascending, then product ID.
 This has no validated commercial-performance claim. Current AIP must exist at the

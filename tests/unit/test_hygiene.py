@@ -27,6 +27,11 @@ spec.loader.exec_module(hygiene)
         ".streamlit/secrets.toml",
         "screen.png",
         ".codex/sessions/session.jsonl",
+        ".codex/hooks.json",
+        ".agents/skills/review/SKILL.md",
+        "AGENTS.md",
+        "CODEX_HANDOVER.md",
+        "src/AGENTS.md",
     ],
 )
 def test_forbidden_artifacts(path: str) -> None:
@@ -39,7 +44,7 @@ def test_forbidden_artifacts(path: str) -> None:
         "src/bef_redbird/domain.py",
         ".github/workflows/ci.yml",
         ".env.example",
-        ".agents/skills/review/SKILL.md",
+        "docs/calculations.md",
         "tests/fixtures/recipe.py",
         "uv.lock",
     ],

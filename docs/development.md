@@ -4,6 +4,10 @@ Use Python 3.12 and uv from the repository root. The committed `pyproject.toml`
 and `uv.lock` define the environment. Never commit private inputs or generated
 workbooks; generate synthetic fixtures in test temporary directories.
 
+Personal coding-agent instructions, skills and configuration stay local and are
+ignored by Git. The content guard also rejects them if force-staged. Shared product
+contracts belong in [calculations.md](calculations.md); delivery guidance lives here.
+
 ```text
 uv sync --locked --group dev --group browser
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
@@ -29,8 +33,7 @@ and type checking. Hooks do not auto-stage fixes, merge, publish or delete branc
 CI runs the authoritative locked checks, Chromium workflow and Windows smoke.
 Failed browser jobs retain only their synthetic PNG screenshots for three days;
 uploaded workbooks, exports, HTML dumps and private data are never CI artifacts.
-No Codex lifecycle hook configuration is installed: client support/trust has not
-been verified. CI actions use full upstream commit SHAs with tag comments;
+CI actions use full upstream commit SHAs with tag comments;
 dependency updates still require compatibility testing and diff review.
 
 The hygiene guard reads Git index blobs, including when the working-tree file
@@ -49,7 +52,7 @@ material method changes, data impact and any migration/rollback. Do not self-app
 through another identity, bypass required checks or force an administrative merge.
 The owner authorizes normal squash merge once all code reviews for the current
 PR head are complete, findings are fixed and resolved, and both required CI
-checks pass. Codex review comments count toward this workflow; a separate formal
+checks pass. Completed code reviews count toward this workflow; a separate formal
 GitHub approving review is not required. The configured approval count is zero,
 with strict Linux/Windows checks, enforced branch protection and force-push
 restrictions retained. Re-review changed code after fixes; never infer acceptance
