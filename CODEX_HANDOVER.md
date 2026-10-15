@@ -4,11 +4,11 @@
 
 Build a working, professional browser application for pharmaceutical procurement **review**, using the real Excel input formats specified below. The application must help a pharmacist move from a prioritised candidate list to historical prices, current substitutes and a recorded judgement in one workspace. Retain Excel import and export.
 
-**Repository:** `bef-redbird`  
-**Suggested application package:** `bef_redbird`  
-**Interface language:** Danish. Code, technical documentation and tests: English.  
-**Preferred starting implementation:** Python, Streamlit, Plotly, DuckDB and Excel adapters. These are design proposals, not an instruction to retain a weaker design; see the decision latitude below.  
-**First release:** deterministic calculations and transparent screening; no model required. Candidate count is user-editable, with 50 as the initial default, not a fixed limit.  
+**Repository:** `bef-redbird`
+**Suggested application package:** `bef_redbird`
+**Interface language:** Danish. Code, technical documentation and tests: English.
+**Preferred starting implementation:** Python, Streamlit, Plotly, DuckDB and Excel adapters. These are design proposals, not an instruction to retain a weaker design; see the decision latitude below.
+**First release:** deterministic calculations and transparent screening; no model required. Candidate count is user-editable, with 50 as the initial default, not a fixed limit.
 **Deployment:** browser access, with a private hosted configuration and an equivalent local launch. No installation is required on a viewer's computer.
 
 Implement the application, tests and operating instructions—not just a scaffold or a visual mock-up. Start with the real data contracts and calculation tests, then build the review workspace. Do not add an LLM, autonomous agent, ordering integration or speculative infrastructure.

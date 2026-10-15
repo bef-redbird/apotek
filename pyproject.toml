@@ -1,0 +1,61 @@
+[project]
+name = "bef-redbird"
+version = "0.1.0"
+description = "Deterministic Danish pharmaceutical procurement review workspace"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "streamlit>=1.50,<2",
+  "plotly>=6,<7",
+  "openpyxl>=3.1.5,<4",
+  "xlsxwriter>=3.2,<4",
+  "defusedxml>=0.7.1,<1",
+  "pandas>=2.2,<3",
+  "xlrd>=2.0.2,<3",
+  "olefile>=0.47,<1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bef_redbird"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.14,<1",
+    "mypy>=1.18,<2",
+    "pre-commit>=4,<5",
+    "types-openpyxl",
+    "pandas-stubs",
+    "psutil>=7,<8",
+    "xlwt==1.3.0",
+    "types-olefile>=0.47.0.20260508",
+    "types-xlrd>=2.0.0.20260518",
+    "types-defusedxml>=0.7.0.20260504",
+]
+browser = ["pytest-playwright>=0.7,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--import-mode=importlib -m 'not private and not browser'"
+markers = ["private: authorised external original workbooks", "browser: real Chromium workflow"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["plotly.*", "xlsxwriter.*"]
+ignore_missing_imports = true

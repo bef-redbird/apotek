@@ -1,0 +1,50 @@
+minimum_pre_commit_version: '4.0.0'
+default_install_hook_types: [pre-commit, pre-push]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    # Public upstream pin: v5.0.0
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # pragma: allowlist secret
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+  - repo: https://github.com/Yelp/detect-secrets
+    # Public upstream pin: v1.5.0
+    rev: 68e8b45440415753fff70a312ece8da92ba85b4a  # pragma: allowlist secret
+    hooks:
+      - id: detect-secrets
+        args: [--no-verify]
+        # Dependency integrity hashes are reviewed lock artifacts, not credentials.
+        exclude: ^(uv\.lock|requirements\.txt)$
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Public upstream pin: v0.17.0
+    rev: 44b5042edab9382aba712eed4f9c7bab7a3d6a3e  # pragma: allowlist secret
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: staged-content-guard
+        name: Inspect staged repository content
+        entry: uv run --no-sync python scripts/check_repo_hygiene.py --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: deterministic-tests
+        name: Synthetic deterministic tests
+        entry: uv run --no-sync pytest -m 'not browser and not private'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: type-check
+        name: Type check application
+        entry: uv run --no-sync mypy src/bef_redbird
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
