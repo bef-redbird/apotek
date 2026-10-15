@@ -35,7 +35,7 @@ or rewritten. Synthetic XLSX/BIFF tests cover this departure independently.
 
 Parser v3 records duplicate AIP ambiguity per period, preserves unaffected prices
 and blocks ranking only for conflicts inside the applied decision-time window.
-Optional LMS metadata outside the date block is ignored; malformed date-like
+Unrecognised optional LMS metadata outside the date block is ignored; malformed date-like
 headings and unknown headings inside the date block remain import errors.
 Known group IDs survive invalid product rows so group incompleteness stays visible.
 Successful analysis replacement retains queue preferences while clearing judgments.
@@ -483,7 +483,22 @@ Do not label the newest available sample “current market data” when it is ol
 
 Include “Antal kandidater” and an all-rankable mode near the queue; keep them separate from methodological settings. Implement all behaviours in 6.5. Use a supported Streamlit selectable dataframe [R1] or a tested equally lean selection control. Track selected products by `product_id` and analysis ID, never only by dataframe row offset. Map selection against the exact dataframe rendered on that rerun, reset stale row events when filtering/sorting changes and provide a keyboard-accessible product selector as a fallback. Test sort/filter selection explicitly.
 
-Show a compact set of columns: canonical rank, product ID, optional display name, current cost, A→C/B→C, distance to own median and review status. Put detailed statistics in the right panel; do not force 15 columns into the list.
+The decision workspace uses four queue columns: canonical rank, product ID,
+optional descriptive label and current cost. Names, strength, form, pack and company
+are optional display metadata, never calculation requirements. Searchable selectors
+show labels plus stable IDs. Review status can filter the list; codes, current AIP,
+own historical median and price gap belong in the detail panel. Native table sorts
+remain independent of previous/next navigation, which follows the visible filtered
+canonical sequence. An outside-list selection disables that sequence navigation.
+
+Price evidence and alternative selection share the default tab. Every found valid
+snapshot group member can be inspected; opening an alternative as the active candidate
+is explicit and offered only for eligible candidates. Comparison never changes the
+review owner or eligibility. Different line styles and marker shapes supplement chart
+colours. Draft reviews persist across product switches in session; explicit save or
+save-and-next commits them to Excel/JSON. Restoring JSON deliberately discards drafts.
+The existing calculation/parser method versions and JSON schema stay unchanged;
+optional descriptive labels do not alter numeric parsing, ranking or analysis identity.
 
 Selecting a row is not the same as marking it for export. Use an explicit saved selection/review control. Keep current inspection, export selection and review status separate.
 
@@ -519,11 +534,12 @@ Export choices: current canonical Top N / all-rankable queue, explicitly selecte
 
 Use the same AnalysisResult plus an explicit ExportScope/queue snapshot. Capture requested N, effective N, mode and exact exported IDs at download time so the workbook is reproducible even after the user resizes the on-screen queue. Notes are copied from the matching review state, not reread from an unrelated analysis.
 
-Worksheets:
+Worksheets (the decision overview is first; complete evidence remains accessible):
 
-1. `Kandidater`: selected scope, ranks, six source fields, current AIP, features, quality flags, reasons, review statuses and notes.
-2. `Gruppeoverblik`: found group members for exported candidates; group completeness caveat and history coverage. Deduplicate repeated group references without losing the relation to selected candidates.
-3. `Metode og datakontrol`: run/analysis identity, source hashes/basenames, declared periods and availability metadata, applied analysis settings, queue/export scope (requested/actual counts and ordered IDs), method/schema versions, validation/filter counts and limitations.
+1. `Indkøbsoverblik`: concise product labels, saved judgments/notes, current cost and AIP, historical median and material data context. Full ranks, median distance and group context remain in the supporting sheets. Historical differences are not promised savings.
+2. `Kandidater`: selected scope, ranks, six source fields, current AIP, features, quality flags, reasons, review statuses and notes.
+3. `Gruppeoverblik`: found group members for exported candidates; group completeness caveat and history coverage. Deduplicate repeated group references without losing the relation to selected candidates.
+4. `Metode og datakontrol`: run/analysis identity, source hashes/basenames, declared periods and availability metadata, applied analysis settings, queue/export scope (requested/actual counts and ordered IDs), method/schema versions, validation/filter counts and limitations.
 
 Use numeric Excel cells for numeric values, text cells for six-digit IDs, readable Danish number/date formats, frozen headers, filters, sensible widths and restrained styling. Avoid large decorative title blocks and merged cells in data tables. Do not export the entire multi-million-observation history by default.
 

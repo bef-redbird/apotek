@@ -33,16 +33,32 @@ No hosted instance or access-control verification is implied by these commands.
 3. Type any positive **Antal kandidater** (initially 50), or choose **Alle
    prioriterbare**. This slices the existing full ranking and preserves reviews.
    Search filters the chosen scope; it does not promote products into the queue.
-4. Select a row or use the product selector. Inspect the observed AIP chart and
-   **Fundne alternativer i rapporten**. Current report groups are not historical
-   memberships or a verified complete market. Package AIP is not a unit-price
-   or dispensing-price comparison.
-5. Save a review status and plain-text note; mark export selections separately.
-   Export the canonical queue, explicit selection or all eligible candidates.
-   Download a JSON session copy before disconnecting or replacing an analysis.
+4. Select a row or search **Find en kandidat (navn eller varenummer)**. Optional
+   medicine, strength, form, pack and company labels distinguish products.
+   **Forrige / Næste** follow the filtered list in canonical order; table sorting
+   changes only the table. Inspect current cost, AIP and the product's own historical
+   median under **Pris og alternativer**. Select an alternative beside the chart;
+   **Åbn alternativ som kandidat** is available when it passes the candidate filter.
+   All found group members remain inspectable, including H/K and missing history.
+   Current groups are not historical memberships or a verified complete market.
+   Package AIP is not a unit-price or dispensing-price comparison.
+5. Under **Vurdering**, choose status, note and export inclusion. Drafts survive
+   product changes in this session. **Gem vurdering** commits them to exports;
+   **Gem og næste** saves and opens the next visible candidate. Only saved reviews
+   appear in downloads. Replacing the analysis requires acknowledging saved work
+   or unsaved drafts; restoring a JSON copy deliberately replaces both.
+6. Open **Eksport og sessionskopi**. Export the canonical queue, explicit selection
+   or all eligible candidates. Excel opens on **Indkøbsoverblik**, a concise decision
+   sheet with names, reviews and prices. **Kandidater** retains full evidence,
+   **Gruppeoverblik** retains all found alternatives, and **Metode og datakontrol**
+   records the reproducible scope. Download JSON before disconnecting or replacing
+   the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
 On desktop, the candidate list stays beside the selected product's price-history,
-alternatives and review tabs. Narrow screens stack the two panels.
+comparison and review tabs. Import and export controls stay in disclosures.
+Narrow screens stack the two panels. Per-product comparison choices survive
+product changes; a prepared Excel download survives inspection changes but
+is invalidated when saved reviews or its scope change.
 
 Everything is temporary and isolated to the browser session. Restart/disconnection
 can lose uploads and notes. Restore JSON only after loading identical source bytes,
@@ -73,11 +89,13 @@ Duplicate date headers are rejected as ambiguous, even if source values happen
 to match. Duplicate identical six-field Cito rows collapse with source row references;
 conflicts remove the product from calculation and flag affected group context.
 Blank storage is retained as unspecified; blank classifications never pass the
-candidate filter. Missing groups never join each other. Optional names are display
-labels only.
+candidate filter. Missing groups never join each other. Optional names, strength,
+form, pack and company are display labels only; formulas/errors and ambiguous
+optional headings are ignored for labels. These display additions do not change
+calculation definitions, method versions, analysis identity or JSON compatibility.
 
-Optional LMS metadata before or after the date block is ignored. Unknown/blank
-headings inside that block and malformed date-like headings remain errors;
+Unrecognised optional LMS metadata before or after the date block is ignored.
+Unknown/blank headings inside that block and malformed date-like headings remain errors;
 recognised reference fields may be reordered between dates. Conflicting duplicate
 AIP observations become explicit gaps only at the affected periods. A conflict
 blocks ranking only inside the applied history window at or before the confirmed
