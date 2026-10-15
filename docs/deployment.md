@@ -96,7 +96,7 @@ confirmed ISO period date (the fixture test defaults to the handover's 2026-09-2
 test context, not an asserted date for a different report). Then run:
 
 ```text
-uv run pytest -m private tests/private -q -s --tb=short --assert=plain
+uv run --group dev pytest -m private tests/private -q -s --tb=short --assert=plain
 ```
 
 The check compares aggregate counts and a small source-cell sample using an
