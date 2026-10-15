@@ -33,7 +33,15 @@ jobs:
       - run: uv run --no-sync pre-commit run --all-files --hook-stage pre-commit
       - run: uv run --no-sync pytest -m 'not browser and not private'
       - run: uv run --no-sync playwright install --with-deps chromium
-      - run: uv run --no-sync pytest -m browser tests/browser
+      - run: uv run --no-sync pytest -m browser tests/browser --basetemp "${{ runner.temp }}/redbird-browser"
+      # Only bounded synthetic browser images, never uploads, downloads or source data.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: synthetic-browser-failure
+          path: ${{ runner.temp }}/redbird-browser/*/*.png
+          if-no-files-found: ignore
+          retention-days: 3
   windows:
     name: Windows synthetic smoke
     runs-on: windows-latest

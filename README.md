@@ -41,6 +41,9 @@ No hosted instance or access-control verification is implied by these commands.
    Export the canonical queue, explicit selection or all eligible candidates.
    Download a JSON session copy before disconnecting or replacing an analysis.
 
+On desktop, the candidate list stays beside the selected product's price-history,
+alternatives and review tabs. Narrow screens stack the two panels.
+
 Everything is temporary and isolated to the browser session. Restart/disconnection
 can lose uploads and notes. Restore JSON only after loading identical source bytes,
 confirmed period, availability metadata and analysis settings. Excel is a review

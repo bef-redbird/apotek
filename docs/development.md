@@ -27,6 +27,8 @@ private-key detection) and large-file
 checks plus the staged-content guard. Pre-push runs deterministic synthetic tests
 and type checking. Hooks do not auto-stage fixes, merge, publish or delete branches.
 CI runs the authoritative locked checks, Chromium workflow and Windows smoke.
+Failed browser jobs retain only their synthetic PNG screenshots for three days;
+uploaded workbooks, exports, HTML dumps and private data are never CI artifacts.
 No Codex lifecycle hook configuration is installed: client support/trust has not
 been verified. CI actions use full upstream commit SHAs with tag comments;
 dependency updates still require compatibility testing and diff review.

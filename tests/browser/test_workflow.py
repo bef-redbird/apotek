@@ -21,7 +21,7 @@ from openpyxl import load_workbook
 from tests.fixtures import synthetic_workbooks
 
 if TYPE_CHECKING:
-    from playwright.sync_api import Browser, Page
+    from playwright.sync_api import Browser, Locator, Page
 
 playwright = pytest.importorskip(
     "playwright.sync_api", reason="Install the browser dependency group"
@@ -78,11 +78,21 @@ def workspace_url() -> Iterator[str]:
             process.wait(timeout=10)
 
 
+def _settled(page: Page) -> None:
+    expect(page.get_by_test_id("stApp")).to_have_attribute("data-test-script-state", "notRunning")
+
+
 def _select(page: Page, label: str, value: str) -> None:
+    _settled(page)
     control = page.get_by_role("combobox", name=label, exact=True)
+    control.evaluate("e => e.scrollIntoView({block:'center', behavior:'instant'})")
+    expect(control).to_be_in_viewport(ratio=1)
     control.click()
-    control.fill(value)
+    if label == "Vælg varenr. (alle kandidater)":
+        control.fill(value)
     page.get_by_role("option", name=value, exact=True).click()
+    expect(control).to_have_value(value)
+    _settled(page)
 
 
 def _load(page: Page, workspace_url: str, tmp_path: Path, count: int = 120) -> None:
@@ -123,6 +133,62 @@ def _download(page: Page, label: str, tmp_path: Path) -> Path:
     return target
 
 
+def _visible_height(locator: Locator) -> float:
+    """Measure visible height after viewport and ancestor clipping."""
+    return float(
+        locator.evaluate("""element => {
+        const rect = element.getBoundingClientRect();
+        let top = Math.max(64, rect.top), bottom = Math.min(innerHeight, rect.bottom);
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+            if (/(auto|scroll|hidden)/.test(getComputedStyle(parent).overflowY)) {
+                const clip = parent.getBoundingClientRect();
+                top = Math.max(top, clip.top); bottom = Math.min(bottom, clip.bottom);
+            }
+        }
+        return Math.max(0, bottom - top);
+    }""")
+    )
+
+
+def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
+    _settled(page)
+    queue = page.get_by_role("heading", name="Kandidater", exact=True)
+    detail = page.get_by_role("heading", name="Vare og vurdering", exact=True)
+    queue_column = queue.locator("xpath=ancestor::div[@data-testid='stColumn'][1]")
+    detail_column = detail.locator("xpath=ancestor::div[@data-testid='stColumn'][1]")
+    grid = page.locator('[data-testid="stDataFrame"]:visible').first
+    chart = page.get_by_test_id("stPlotlyChart").first
+    form = page.get_by_test_id("stForm").first
+    for size, width, height in (("laptop", 1366, 768), ("desktop", 1920, 1080)):
+        page.set_viewport_size({"width": width, "height": height})
+        left, right = queue_column.bounding_box(), detail_column.bounding_box()
+        assert left is not None and right is not None
+        assert left["x"] + left["width"] <= right["x"], "List/detail must be side by side"
+        page.get_by_role("tab", name="Prishistorik", exact=True).click()
+        queue.evaluate("e => e.scrollIntoView({block:'start'})")
+        chart.scroll_into_view_if_needed()
+        assert _visible_height(grid) >= 120, "Candidate rows must remain visible with chart"
+        assert _visible_height(chart) >= 250, "Chart must be usable alongside the candidate list"
+        page.screenshot(path=str(tmp_path / f"linked-chart-{size}.png"))
+        page.get_by_role("tab", name="Vurdering", exact=True).click()
+        form.scroll_into_view_if_needed()
+        assert _visible_height(grid) >= 120, "Candidate rows must remain visible during review"
+        assert _visible_height(form) >= 180, "Review must be usable alongside the candidate list"
+        page.screenshot(path=str(tmp_path / f"linked-review-{size}.png"))
+
+    page.set_viewport_size({"width": 600, "height": 900})
+    left, right = queue_column.bounding_box(), detail_column.bounding_box()
+    assert left is not None and right is not None
+    assert abs(left["x"] - right["x"]) <= 2, "Native columns must stack on narrow screens"
+    assert right["y"] > left["y"]
+    assert left["width"] > 450 and right["width"] > 450
+    page.get_by_role("tab", name="Prishistorik", exact=True).click()
+    chart.scroll_into_view_if_needed()
+    assert _visible_height(chart) >= 250
+    page.screenshot(path=str(tmp_path / "stacked-narrow.png"))
+    page.set_viewport_size({"width": 1366, "height": 768})
+
+
 def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> None:
     context = browser.new_context(viewport={"width": 1366, "height": 768}, accept_downloads=True)
     page = context.new_page()
@@ -147,10 +213,11 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         expect(selector).to_have_value("000001")
 
         # The column's native menu exposes accessible sorting commands.
-        grid.click(position={"x": 125, "y": 15})
+        grid.click(position={"x": 105, "y": 15})
         page.get_by_text("Sort descending", exact=False).click()
         grid.click(position={"x": 16, "y": 58})
         expect(selector).to_have_value("000080")
+        page.get_by_role("tab", name="Vurdering", exact=True).click()
         page.get_by_role("textbox", name="Note", exact=True).fill("=Syntetisk gennemgang")
         page.get_by_text("Medtag i valgt eksport", exact=True).click()
         _select(page, "Vurdering", "Interessant")
@@ -175,7 +242,11 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         search.press("Enter")
         _select(page, "Visning", "Alle prioriterbare")
         expect(page.get_by_text("Alle 120 prioriterbare kandidater.", exact=False)).to_be_visible()
-        _select(page, "Grafens visningsvindue", "Seneste 26 perioder")
+        _settled(page)
+        page.get_by_role("tab", name="Prishistorik", exact=True).click()
+        page.get_by_text("Grafvisning", exact=True).click()
+        page.get_by_text("Seneste 26 perioder", exact=True).click()
+        expect(page.get_by_role("radio", name="Seneste 26 perioder", exact=True)).to_be_checked()
         page.get_by_text("Retrospektiv visning (også senere priser)", exact=True).click()
         _select(page, "Vælg varenr. (alle kandidater)", "000001")
         expect(page.get_by_text("000001 · Eksempelpakning 1", exact=True)).to_be_visible()
@@ -192,6 +263,15 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             "return p && p.data.length===2 && p.data[0].x.length===26 "
             "&& p.data[1].name==='900001'}"
         )
+        page.get_by_text("Grafvisning", exact=True).click()
+        page.get_by_role("tab", name="Alternativer", exact=True).click()
+        alternatives = page.get_by_role("tabpanel", name="Alternativer", exact=True)
+        expect(
+            alternatives.get_by_text("Gruppefuldstændighed er ikke verificeret", exact=False)
+        ).to_be_visible()
+        alternatives.get_by_text("Fundne alternativer i rapporten", exact=True).click()
+        expect(alternatives.get_by_test_id("stDataFrame")).to_be_visible()
+        page.get_by_role("tab", name="Prishistorik", exact=True).click()
 
         _select(page, "Visning", "Top N")
         requested.fill("80")
@@ -219,12 +299,13 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             "() => {const p=document.querySelector('.js-plotly-plot');"
             "return p && p.data.length===2 && p.data[1].name==='900001'}"
         )
+        _linked_layout_evidence(page, tmp_path)
 
         for size, width, height in (("laptop", 1366, 768), ("desktop", 1920, 1080)):
             page.set_viewport_size({"width": width, "height": height})
             for section, heading in (
                 ("workspace", "Redbird · indkøbsgennemgang"),
-                ("table", "Kandidater til gennemgang"),
+                ("table", "Kandidater"),
                 ("detail", "Vare og vurdering"),
             ):
                 page.get_by_role("heading", name=heading, exact=True).evaluate(
@@ -246,9 +327,17 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
                 "buffer": b"invalid workbook",
             }
         )
+        # Upload completion and the server rerun are separate browser events. The
+        # pending-input notice proves Streamlit has consumed the changed source.
+        expect(
+            page.get_by_role("button", name="Remove synthetic-broken.xlsx", exact=True)
+        ).to_be_visible()
+        expect(page.get_by_text("Der er ændrede input.", exact=False)).to_be_visible()
+        _settled(page)
         page.get_by_role("button", name="Anvend indstillinger", exact=True).click()
         expect(page.get_by_text("tidligere, sammenhængende analyse", exact=False)).to_be_visible()
         _select(page, "Vælg varenr. (alle kandidater)", "000080")
+        page.get_by_role("tab", name="Vurdering", exact=True).click()
         expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value(
             "=Syntetisk gennemgang"
         )
@@ -269,6 +358,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             expect(isolated.get_by_role("textbox", name="Note", exact=True)).to_have_count(0)
             expect(isolated.get_by_text("synthetic-cito.xlsx", exact=False)).to_have_count(0)
             _load(isolated, workspace_url, tmp_path, count=3)
+            isolated.get_by_role("tab", name="Vurdering", exact=True).click()
             expect(isolated.get_by_role("textbox", name="Note", exact=True)).to_have_value("")
             isolated.get_by_role("textbox", name="Note", exact=True).fill("Anden session")
             isolated.get_by_role("button", name="Gem vurdering", exact=True).click()

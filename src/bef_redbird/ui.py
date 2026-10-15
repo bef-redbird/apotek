@@ -277,7 +277,7 @@ def _inspect_table(key: str, ids: tuple[str, ...], analysis_id: str) -> None:
 
 
 def _queue(analysis: AnalysisResult, review: ReviewState) -> None:
-    st.subheader("Kandidater til gennemgang")
+    st.subheader("Kandidater")
     mode_column, count_column = st.columns([2, 1])
     mode = mode_column.selectbox(
         "Visning",
@@ -380,6 +380,15 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> None:
         selection_mode="single-row",
         on_select=partial(_inspect_table, key, ids, analysis.analysis_id),
         key=key,
+        column_config={
+            "Prioritet": st.column_config.NumberColumn(width=85),
+            "Varenr.": st.column_config.TextColumn(width=90),
+            "Navn": st.column_config.TextColumn(width=150),
+            "Kostpris (DKK)": st.column_config.NumberColumn(width=110),
+            "Koder": st.column_config.TextColumn(width=70),
+            "Afstand median (DKK)": st.column_config.NumberColumn(width=120),
+            "Vurdering": st.column_config.TextColumn(width=145),
+        },
     )
 
 
@@ -446,144 +455,165 @@ def _detail(analysis: AnalysisResult, review: ReviewState) -> None:
         for item in group
         if item.product_id != product_id and item.product_id in analysis.history.prices
     ]
-    overlay_column, window_column = st.columns([2, 1])
-    overlays = overlay_column.multiselect(
-        "Vis fundne gruppealternativer i grafen (højst 5)",
-        found,
-        max_selections=5,
-        key=f"overlay_{analysis.analysis_id}_{product_id}",
+    history_tab, alternatives_tab, review_tab = st.tabs(
+        ["Prishistorik", "Alternativer", "Vurdering"], key=f"detail_tabs_{analysis.analysis_id}"
     )
-    view = window_column.selectbox(
-        "Grafens visningsvindue",
-        ["Hele historikken", "Seneste 26 perioder", "Seneste 52 perioder"],
-        key="chart_window",
-    )
-    retrospective = st.checkbox("Retrospektiv visning (også senere priser)", key="retrospective")
-    limit = {"Hele historikken": None, "Seneste 26 perioder": 26, "Seneste 52 perioder": 52}[view]
-    st.plotly_chart(
-        history_chart(
-            analysis,
-            product_id,
-            tuple(overlays),
-            retrospective=retrospective,
-            view_periods=limit,
-        ),
-        width="stretch",
-        key=f"history_{product_id}",
-    )
-    st.caption(
-        "AIP pr. pakning er ikke dokumentation for sammenlignelig enhedspris eller "
-        "udleveringspris. Gruppefuldstændighed er ikke verificeret. "
-        "Kun fundne medlemmer fra den aktuelle Cito-rapport vises."
-    )
-    with st.expander("Historiske nøgletal og hændelser"):
-        features = candidate.features
-        st.write(
-            f"Gyldige priser: {features.n_valid}/{features.window_periods} · "
-            f"Dækning: {_percent(features.coverage)} · "
-            f"Aktuel AIP: {_money(features.current_aip_ore)} DKK"
-        )
-        st.write(
-            f"Egen median: {_money(features.median_ore, 3)} DKK · "
-            f"Prispercentil: {_percent(features.percentile)} · "
-            f"Seneste ændring: {_percent(features.previous_change)}"
-        )
-        distance = features.median_distance_dkk
-        distance_text = "Mangler" if distance is None else f"{distance:.3f}".replace(".", ",")
-        st.text(f"Afstand til egen historiske median: {distance_text} DKK")
-        st.write(
-            f"Prisstigninger: {features.rise_count}/{features.adjacent_pair_count} gyldige "
-            f"nabopar. Fald efter stigning: {features.any_reversal_count}/"
-            f"{features.reversal_denominator}; fuldt tilbagefald: "
-            f"{features.full_reversal_count}/{features.reversal_denominator}."
-        )
-        st.caption("Små nævnere giver usikre historiske andele; tallene er ikke en prognose.")
-        if features.reversal_denominator == 0:
-            st.text("Ingen observerbare efterperioder; andele kan ikke beregnes (nævner 0).")
-        elif features.reversal_denominator < analysis.settings.minimum_events_for_rate_display:
-            st.text(
-                "Begrænset grundlag: andele skjules under den anvendte mindstegrænse "
-                f"på {analysis.settings.minimum_events_for_rate_display} observerbare hændelser."
+    with history_tab:
+        with st.expander("Grafvisning"):
+            overlays = st.multiselect(
+                "Vis fundne gruppealternativer i grafen (højst 5)",
+                found,
+                max_selections=5,
+                key=f"overlay_{analysis.analysis_id}_{product_id}",
             )
-        else:
+            view = st.radio(
+                "Grafens visningsvindue",
+                ["Hele historikken", "Seneste 26 perioder", "Seneste 52 perioder"],
+                horizontal=True,
+                key="chart_window",
+            )
+            retrospective = st.checkbox(
+                "Retrospektiv visning (også senere priser)", key="retrospective"
+            )
+        limit = {"Hele historikken": None, "Seneste 26 perioder": 26, "Seneste 52 perioder": 52}[
+            view
+        ]
+        st.plotly_chart(
+            history_chart(
+                analysis,
+                product_id,
+                tuple(overlays),
+                retrospective=retrospective,
+                view_periods=limit,
+            ),
+            width="stretch",
+            key=f"history_{product_id}",
+        )
+        st.caption(
+            "AIP pr. pakning er ikke dokumentation for sammenlignelig enhedspris eller "
+            "udleveringspris. Gruppefuldstændighed er ikke verificeret. "
+            "Kun fundne medlemmer fra den aktuelle Cito-rapport vises."
+        )
+        with st.expander("Historiske nøgletal og hændelser"):
+            features = candidate.features
             st.write(
-                f"Andel med fald: {_percent(features.any_reversal_rate)} · "
-                f"Fuldt tilbagefald: {_percent(features.full_reversal_rate)}"
+                f"Gyldige priser: {features.n_valid}/{features.window_periods} · "
+                f"Dækning: {_percent(features.coverage)} · "
+                f"Aktuel AIP: {_money(features.current_aip_ore)} DKK"
             )
-        if features.events:
+            st.write(
+                f"Egen median: {_money(features.median_ore, 3)} DKK · "
+                f"Prispercentil: {_percent(features.percentile)} · "
+                f"Seneste ændring: {_percent(features.previous_change)}"
+            )
+            distance = features.median_distance_dkk
+            distance_text = "Mangler" if distance is None else f"{distance:.3f}".replace(".", ",")
+            st.text(f"Afstand til egen historiske median: {distance_text} DKK")
+            st.write(
+                f"Prisstigninger: {features.rise_count}/{features.adjacent_pair_count} gyldige "
+                f"nabopar. Fald efter stigning: {features.any_reversal_count}/"
+                f"{features.reversal_denominator}; fuldt tilbagefald: "
+                f"{features.full_reversal_count}/{features.reversal_denominator}."
+            )
+            st.caption("Små nævnere giver usikre historiske andele; tallene er ikke en prognose.")
+            if features.reversal_denominator == 0:
+                st.text("Ingen observerbare efterperioder; andele kan ikke beregnes (nævner 0).")
+            elif features.reversal_denominator < analysis.settings.minimum_events_for_rate_display:
+                st.text(
+                    "Begrænset grundlag: andele skjules under den anvendte mindstegrænse "
+                    f"på {analysis.settings.minimum_events_for_rate_display} "
+                    "observerbare hændelser."
+                )
+            else:
+                st.write(
+                    f"Andel med fald: {_percent(features.any_reversal_rate)} · "
+                    f"Fuldt tilbagefald: {_percent(features.full_reversal_rate)}"
+                )
+            if features.events:
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Periode": event.period.strftime("%d-%m-%Y"),
+                                "AIP før (DKK)": event.start_ore / 100,
+                                "AIP efter (DKK)": event.peak_ore / 100,
+                                "AIP næste (DKK)": event.next_ore / 100
+                                if event.next_ore is not None
+                                else None,
+                                "Næste ændring": event.next_change,
+                                "Tilbageført andel": event.giveback,
+                            }
+                            for event in features.events
+                        ]
+                    ).style.format(
+                        precision=3,
+                        decimal=",",
+                        na_rep="Mangler",
+                        subset=[
+                            "AIP før (DKK)",
+                            "AIP efter (DKK)",
+                            "AIP næste (DKK)",
+                            "Næste ændring",
+                            "Tilbageført andel",
+                        ],
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                )
+    with alternatives_tab:
+        st.caption(
+            "Gruppefuldstændighed er ikke verificeret; tabellen viser kun fundne "
+            "medlemmer af den aktuelle Cito-rapport."
+        )
+        with st.expander("Fundne alternativer i rapporten"):
             st.dataframe(
                 pd.DataFrame(
                     [
                         {
-                            "Periode": event.period.strftime("%d-%m-%Y"),
-                            "AIP før (DKK)": event.start_ore / 100,
-                            "AIP efter (DKK)": event.peak_ore / 100,
-                            "AIP næste (DKK)": event.next_ore / 100
-                            if event.next_ore is not None
-                            else None,
-                            "Næste ændring": event.next_change,
-                            "Tilbageført andel": event.giveback,
+                            "Varenr.": item.product_id,
+                            "Aktuel vare": item.product_id == product_id,
+                            "Koder": f"{item.current_code}→{item.upcoming_code}",
+                            "Kostpris (DKK)": item.current_cost_ore / 100,
+                            "Opbevaring": item.storage_code,
+                            "Lagerudelukket": item.storage_code in ("H", "K"),
+                            "Historik": "Fundet"
+                            if item.product_id in analysis.history.prices
+                            else "Mangler",
                         }
-                        for event in features.events
+                        for item in group
                     ]
-                ).style.format(
-                    precision=3,
-                    decimal=",",
-                    na_rep="Mangler",
-                    subset=[
-                        "AIP før (DKK)",
-                        "AIP efter (DKK)",
-                        "AIP næste (DKK)",
-                        "Næste ændring",
-                        "Tilbageført andel",
-                    ],
-                ),
+                ).style.format(precision=2, decimal=",", thousands=".", subset=["Kostpris (DKK)"]),
                 hide_index=True,
                 width="stretch",
             )
-    with st.expander("Fundne alternativer i rapporten"):
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Varenr.": item.product_id,
-                        "Aktuel vare": item.product_id == product_id,
-                        "Koder": f"{item.current_code}→{item.upcoming_code}",
-                        "Kostpris (DKK)": item.current_cost_ore / 100,
-                        "Opbevaring": item.storage_code,
-                        "Lagerudelukket": item.storage_code in ("H", "K"),
-                        "Historik": "Fundet"
-                        if item.product_id in analysis.history.prices
-                        else "Mangler",
-                    }
-                    for item in group
-                ]
-            ).style.format(precision=2, decimal=",", thousands=".", subset=["Kostpris (DKK)"]),
-            hide_index=True,
-            width="stretch",
-        )
-    saved = review.reviews.get(product_id, Review())
-    suffix = f"{analysis.analysis_id}_{product_id}"
-    with st.form(f"review_form_{suffix}"):
-        status = st.selectbox(
-            "Vurdering", STATUSES, index=STATUSES.index(saved.status), key=f"review_status_{suffix}"
-        )
-        note = st.text_area("Note", value=saved.note, max_chars=4000, key=f"review_note_{suffix}")
-        selected = st.checkbox(
-            "Medtag i valgt eksport",
-            value=product_id in review.selected_ids,
-            key=f"review_selected_{suffix}",
-        )
-        if st.form_submit_button("Gem vurdering"):
-            review.reviews[product_id] = Review(status, note)
-            if selected:
-                review.selected_ids.add(product_id)
-            else:
-                review.selected_ids.discard(product_id)
-            st.session_state["saved_review"] = suffix
-            st.rerun()
-    if st.session_state.pop("saved_review", None) == suffix:
-        st.success("Vurderingen er gemt i denne midlertidige session.")
+    with review_tab:
+        saved = review.reviews.get(product_id, Review())
+        suffix = f"{analysis.analysis_id}_{product_id}"
+        with st.form(f"review_form_{suffix}"):
+            status = st.selectbox(
+                "Vurdering",
+                STATUSES,
+                index=STATUSES.index(saved.status),
+                key=f"review_status_{suffix}",
+            )
+            note = st.text_area(
+                "Note", value=saved.note, max_chars=4000, key=f"review_note_{suffix}"
+            )
+            selected = st.checkbox(
+                "Medtag i valgt eksport",
+                value=product_id in review.selected_ids,
+                key=f"review_selected_{suffix}",
+            )
+            if st.form_submit_button("Gem vurdering"):
+                review.reviews[product_id] = Review(status, note)
+                if selected:
+                    review.selected_ids.add(product_id)
+                else:
+                    review.selected_ids.discard(product_id)
+                st.session_state["saved_review"] = suffix
+                st.rerun()
+        if st.session_state.pop("saved_review", None) == suffix:
+            st.success("Vurderingen er gemt i denne midlertidige session.")
 
 
 def _exports(analysis: AnalysisResult, review: ReviewState) -> None:
@@ -690,8 +720,11 @@ def _workspace() -> None:
         return
     review = _review(analysis)
     _header(analysis)
-    _queue(analysis, review)
-    _detail(analysis, review)
+    queue_column, detail_column = st.columns([2, 3], gap="medium")
+    with queue_column:
+        _queue(analysis, review)
+    with detail_column:
+        _detail(analysis, review)
     _exports(analysis, review)
 
 
