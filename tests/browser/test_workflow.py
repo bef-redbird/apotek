@@ -156,6 +156,14 @@ def _load(page: Page, workspace_url: str, tmp_path: Path, count: int = 120) -> N
     expect(
         page.get_by_text(f"Viser {min(50, count)} af 50 ønskede kandidater", exact=False)
     ).to_be_visible(timeout=20000)
+    page.get_by_role("heading", name="Redbird · indkøbsgennemgang", exact=True).evaluate(
+        "e => e.scrollIntoView({block:'start'})"
+    )
+    expect(
+        page.get_by_text(
+            "Prioritering til gennemgang — ikke dokumenteret købsgevinst.", exact=False
+        )
+    ).to_be_in_viewport(ratio=1)
 
 
 def _download(page: Page, label: str, tmp_path: Path) -> Path:

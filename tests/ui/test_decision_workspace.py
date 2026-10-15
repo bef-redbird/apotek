@@ -10,6 +10,10 @@ def test_queue_is_compact_and_searches_display_metadata() -> None:
     analysis = synthetic_analysis(3)
     analysis.history.labels["000002"] = "Eksempel 20 mg · 100 stk. · Firma B"
     app = loaded_app(analysis)
+    assert any(
+        "Prioritering til gennemgang — ikke dokumenteret købsgevinst." in c.value
+        for c in app.caption
+    )
     app.text_input(key="search").input("20 mg").run()
     queue = next(frame.value for frame in app.dataframe if "Vare" in frame.value.columns)
     assert list(queue.columns) == ["Prioritet", "Varenr.", "Vare", "Kostpris (DKK)"]

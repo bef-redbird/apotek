@@ -275,6 +275,7 @@ def _header(analysis: AnalysisResult) -> None:
         f"{len(analysis.candidates)} kandidater · {len(analysis.ranked_ids)} kan prioriteres · "
         f"{len(analysis.issues)} dataproblemer · "
         + (f"LMS til {through:%d-%m-%Y}" if through else "Ingen LMS-prisperioder")
+        + " · Prioritering til gennemgang — ikke dokumenteret købsgevinst."
     )
     if through and through < analysis.context.current_period:
         st.warning("LMS-historikken slutter før den bekræftede periode; aktuelle AIP kan mangle.")
