@@ -761,18 +761,16 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
                 "Der er uafklarede rækker i gruppen. Gruppeoverblikket kan være ufuldstændigt."
             )
         features = candidate.features
-        cost, current, middle = st.columns(3)
-        cost.metric(
-            "Kostpris fra Cito",
-            f"{_money(candidate.item.current_cost_ore)} kr.",
-            border=True,
-            help="Rapportens kostpris for den valgte aktuelle periode.",
-        )
+        current, middle, gap = st.columns(3)
         current.metric(
-            "AIP i valgt periode",
+            "Kostpris fra LMS",
             f"{_money(features.current_aip_ore)} kr.",
             border=True,
-            help="LMS-prisen på præcis den bekræftede prisperiodestart; ikke senest kendte pris.",
+            help=(
+                "LMS-AIP pr. pakning for den valgte periode "
+                f"{analysis.context.current_period:%d-%m-%Y}. "
+                "Vises som manglende, hvis perioden ikke har en gyldig pris."
+            ),
         )
         middle.metric(
             "Median i egen historik",
@@ -781,6 +779,16 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
             help="Den midterste gyldige AIP i analysevinduet. Ikke en forventet fremtidig pris.",
         )
         distance = features.median_distance_dkk
+        gap.metric(
+            "Afstand til median",
+            f"{_money(None if distance is None else distance * 100, 3)} kr.",
+            border=True,
+            help=(
+                "Egen historisk median minus periodens LMS-AIP. "
+                "Positivt tal: under medianen; negativt tal: over medianen. "
+                "Historisk forskel, ikke forventet besparelse."
+            ),
+        )
         if distance is None:
             st.caption(
                 "Historisk prisniveau kan ikke sammenlignes: aktuel AIP eller historik mangler."

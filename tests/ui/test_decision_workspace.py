@@ -1,9 +1,50 @@
 """Decision-oriented navigation must preserve product identity and human work."""
 
+from dataclasses import replace
+from datetime import timedelta
+
+import pytest
+
 from bef_redbird.charts import history_chart
 from bef_redbird.domain import Review
+from bef_redbird.service import build_analysis
 from tests.fixtures import load_analysis
 from tests.ui.test_workspace import candidate_picker, loaded_app, synthetic_analysis
+
+
+@pytest.mark.parametrize(
+    ("prices", "expected"),
+    [
+        ((10001, 10000, 10001, 10000), ("100,00 kr.", "100,005 kr.", "0,005 kr.")),
+        ((9000, 10000, 10000, 11000), ("110,00 kr.", "100,000 kr.", "-10,000 kr.")),
+        ((10000, 10000, 10000, 10000), ("100,00 kr.", "100,000 kr.", "0,000 kr.")),
+        ((9000, 10000, 11000, None), ("Mangler kr.", "100,000 kr.", "Mangler kr.")),
+        ((None, None, None, None), ("Mangler kr.", "Mangler kr.", "Mangler kr.")),
+    ],
+)
+def test_comparison_uses_selected_lms_price_and_signed_median_gap(
+    prices: tuple[int | None, ...], expected: tuple[str, str, str]
+) -> None:
+    source = synthetic_analysis(1)
+    # Cito says 120 kr.; a later LMS period says 999.99 kr. Neither is a fallback.
+    history = replace(
+        source.history,
+        periods=(*source.history.periods, source.context.current_period + timedelta(days=14)),
+        prices={"000001": (*prices, 99999)},
+    )
+    analysis = build_analysis(source.snapshot, history, source.context, source.settings)
+    app = loaded_app(analysis)
+    assert [metric.label for metric in app.metric] == [
+        "Kostpris fra LMS",
+        "Median i egen historik",
+        "Afstand til median",
+    ]
+    assert tuple(metric.value for metric in app.metric) == expected
+    if prices[-1] is not None:
+        assert any("Cito-kostpris og periodens AIP" in warning.value for warning in app.warning)
+    else:
+        assert any("aktuel AIP eller historik mangler" in caption.value for caption in app.caption)
+    assert not app.exception
 
 
 def test_queue_is_compact_and_searches_display_metadata() -> None:

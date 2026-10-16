@@ -37,8 +37,10 @@ No hosted instance or access-control verification is implied by these commands.
    **Vælg fra listen med tastatur** provides a keyboard fallback for the same visible rows. Optional
    medicine, strength, form, pack and company labels distinguish products.
    **Forrige kandidat / Næste kandidat** follow the filtered list in canonical order; table sorting
-   changes only the table. Inspect current cost, AIP and the product's own historical
-   median under **Sammenlign priser**. Check alternatives below the chart to compare their
+   changes only the table. **Sammenlign priser** shows the selected period's LMS AIP as
+   **Kostpris fra LMS**, the product's own historical median, and **Afstand til median**
+   on the right (median minus that LMS price). Missing LMS prices stay missing;
+   Cito/LMS mismatch warnings remain visible. Check alternatives below the chart to compare their
    curves (up to five); uncheck to hide them. Only the selected candidate's found group
    is offered. **Vurder alternativ [varenr.]** explicitly opens an eligible alternative.
    All found group members remain inspectable, including H/K and missing history.
