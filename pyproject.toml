@@ -5,7 +5,7 @@ description = "Deterministic Danish pharmaceutical procurement review workspace"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "streamlit>=1.50,<2",
-  "plotly>=6,<7",
+  "plotly>=6,<8",
   "openpyxl>=3.1.5,<4",
   "xlsxwriter>=3.2,<4",
   "defusedxml>=0.7.1,<1",
