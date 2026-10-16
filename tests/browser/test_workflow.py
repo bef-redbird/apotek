@@ -270,6 +270,10 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
     form = page.locator(".st-key-review_editor")
     grid = queue.get_by_test_id("stDataFrame")
     chart = prices.get_by_test_id("stPlotlyChart").first
+    price_metrics = prices.get_by_test_id("stMetric")
+    expect(price_metrics.get_by_test_id("stMetricLabel")).to_have_text(
+        ["Kostpris fra LMS", "Median i egen historik", "Afstand til median"]
+    )
     documentation = page.get_by_text("Kilder, metode og datakontrol", exact=True)
     metrics = {}
     expect(page.get_by_role("tab")).to_have_count(0)
@@ -289,6 +293,13 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
         candidate_box, price_box, review_box = sections
         assert candidate_box is not None and price_box is not None and review_box is not None
         if width > 600:
+            price_cards = [card.bounding_box() for card in price_metrics.all()]
+            assert all(price_cards)
+            first, middle, last = price_cards
+            assert first is not None and middle is not None and last is not None
+            assert first["x"] + first["width"] < middle["x"]
+            assert middle["x"] + middle["width"] < last["x"]
+            assert max(card["y"] for card in (first, middle, last)) - first["y"] <= 2
             assert abs(candidate_box["y"] - price_box["y"]) <= 2, sections
             assert candidate_box["x"] + candidate_box["width"] < price_box["x"], sections
             assert price_box["width"] > candidate_box["width"], sections
@@ -354,6 +365,7 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
         for section, target in (
             ("controls", queue),
             ("table", grid),
+            ("prices", prices),
             ("chart", chart),
             ("review", form),
         ):
