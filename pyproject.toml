@@ -25,7 +25,7 @@ packages = ["src/bef_redbird"]
 dev = [
     "pytest>=8,<10",
     "ruff>=0.14,<1",
-    "mypy>=1.18,<2",
+    "mypy>=1.18,<3",
     "pre-commit>=4,<5",
     "types-openpyxl",
     "pandas-stubs",
