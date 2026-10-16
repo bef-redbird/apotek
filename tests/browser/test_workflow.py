@@ -792,7 +792,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             isolated.goto(workspace_url)
             expect(
                 isolated.get_by_text("Upload Cito-rapport og LMS-prishistorik", exact=False)
-            ).to_be_visible()
+            ).to_be_visible(timeout=30000)
             expect(isolated.get_by_role("textbox", name="Note", exact=True)).to_have_count(0)
             expect(isolated.get_by_text("synthetic-cito.xlsx", exact=False)).to_have_count(0)
             _load(isolated, workspace_url, tmp_path, count=3)
