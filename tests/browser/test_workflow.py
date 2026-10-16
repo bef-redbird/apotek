@@ -196,7 +196,10 @@ def _load(
         workbook.save(output)
         history = output.getvalue()
     page.goto(workspace_url)
-    expect(page.get_by_text("Upload Cito-rapport og LMS-prishistorik", exact=False)).to_be_visible()
+    # The server health endpoint can be ready before a cold app import has finished.
+    expect(page.get_by_text("Upload Cito-rapport og LMS-prishistorik", exact=False)).to_be_visible(
+        timeout=30000
+    )
     page.screenshot(path=str(tmp_path / "empty-laptop.png"))
     uploads = page.locator('input[type="file"]')
     uploads.nth(0).set_input_files(
