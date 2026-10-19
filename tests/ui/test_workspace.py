@@ -92,9 +92,12 @@ def synthetic_analysis(count: int = 120, *, rankable: bool = True) -> AnalysisRe
     )
 
 
-def loaded_app(analysis: AnalysisResult | None = None) -> AppTest:
+def loaded_app(analysis: AnalysisResult | None = None, *, show_review: bool = True) -> AppTest:
     app = AppTest.from_file(str(APP), default_timeout=20)
     app.session_state["analysis"] = analysis or synthetic_analysis()
+    # Existing review-workflow tests explicitly start with the optional editor enabled.
+    if show_review:
+        app.session_state["show_review"] = True
     return app.run()
 
 
@@ -405,8 +408,9 @@ def test_unexpected_failure_is_safe_and_preserves_workspace(
     assert not app.exception
 
 
-def test_restored_review_synchronizes_existing_frontend_preferences() -> None:
-    app = loaded_app()
+@pytest.mark.parametrize("show_review", [False, True])
+def test_restored_review_synchronizes_existing_frontend_preferences(show_review: bool) -> None:
+    app = loaded_app(show_review=show_review)
     aid = "synthetic-analysis"
     app.number_input(key=f"queue_n_{aid}").set_value(17).run()
     restored = ReviewState(aid)
@@ -417,6 +421,10 @@ def test_restored_review_synchronizes_existing_frontend_preferences() -> None:
     app.session_state["sync_review_widgets"] = True
     app.run()
     assert app.number_input(key=f"queue_n_{aid}").value == 80
+    assert app.toggle(key="show_review").value == show_review
+    if not show_review:
+        assert not app.text_area
+        app.toggle(key="show_review").set_value(True).run()
     assert app.text_area(key=f"review_note_{aid}_000001").value == "Gendannet note"
     assert not app.exception
 

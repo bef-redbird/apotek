@@ -131,7 +131,7 @@ def _alternative(page: Page, product_id: str) -> Locator:
 def _review_alternative(page: Page, product_id: str) -> None:
     checkbox = _alternative(page, product_id)
     row = checkbox.locator("xpath=ancestor::*[contains(@class, 'st-key-alternative_')][1]")
-    row.get_by_role("button", name="Vurder", exact=True).click()
+    row.get_by_role("button", name="Vis", exact=True).click()
     _settled(page)
 
 
@@ -251,6 +251,17 @@ def _load(
             "Prioritering til gennemgang — ikke dokumenteret købsgevinst.", exact=False
         )
     ).to_be_in_viewport(ratio=1)
+    expect(page.get_by_role("switch", name="Vis vurdering", exact=True)).not_to_be_checked()
+    expect(page.locator(".st-key-review_editor")).to_have_count(0)
+
+
+def _show_review(page: Page, *, enabled: bool = True) -> None:
+    toggle = page.get_by_role("switch", name="Vis vurdering", exact=True)
+    if toggle.is_checked() != enabled:
+        toggle.press("Space")
+        _settled(page)
+    expect(toggle).to_be_checked(checked=enabled)
+    expect(page.locator(".st-key-review_editor")).to_have_count(1 if enabled else 0)
 
 
 def _download(page: Page, label: str, tmp_path: Path) -> Path:
@@ -291,7 +302,7 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
     price_metrics = prices.get_by_test_id("stMetric")
     rows = prices.locator('[class*="st-key-alternative_"]')
     row_count = rows.count()
-    assert row_count in (6, 12)
+    assert row_count in (2, 6, 12)
     expect(
         prices.get_by_test_id("stMarkdownContainer").filter(
             has_text=re.compile(rf"^Substitutionsalternativer: {row_count} · \d valgt\s*$")
@@ -328,13 +339,16 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             return plot && Math.abs(plot._fullLayout.width - plot.clientWidth) < 3;
         }""")
         prices.screenshot(path=str(tmp_path / f"measured-prices-{size}.png"))
-        sections = [section.bounding_box() for section in (queue, prices, form)]
+        sections = [section.bounding_box() for section in (queue, prices)]
+        review_box = form.bounding_box() if form.count() else None
+        if review_box is not None:
+            sections.append(review_box)
         (tmp_path / f"section-dimensions-{size}.json").write_text(
             json.dumps(sections, indent=2), encoding="utf-8"
         )
         assert all(sections)
-        candidate_box, price_box, review_box = sections
-        assert candidate_box is not None and price_box is not None and review_box is not None
+        candidate_box, price_box = sections[:2]
+        assert candidate_box is not None and price_box is not None
         if width > 600:
             price_cards = [card.bounding_box() for card in price_metrics.all()]
             assert all(price_cards)
@@ -350,26 +364,41 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             assert candidate_box["x"] + candidate_box["width"] < price_box["x"], sections
             assert price_box["width"] > candidate_box["width"], sections
             assert candidate_box["width"] >= 450, sections
-            assert review_box["width"] > candidate_box["width"] + price_box["width"], sections
+            if review_box is not None:
+                assert review_box["width"] > candidate_box["width"] + price_box["width"], sections
         else:
             assert candidate_box["y"] + candidate_box["height"] <= price_box["y"], sections
             assert abs(candidate_box["x"] - price_box["x"]) <= 2, sections
             assert abs(candidate_box["width"] - price_box["width"]) <= 2, sections
             assert candidate_box["width"] >= 450, sections
-        assert review_box["y"] >= max(
+        comparison_bottom = max(
             candidate_box["y"] + candidate_box["height"],
             price_box["y"] + price_box["height"],
-        ), sections
-        assert abs(review_box["x"] - candidate_box["x"]) <= 2, sections
+        )
+        if review_box is not None:
+            assert review_box["y"] >= comparison_bottom, sections
+            assert abs(review_box["x"] - candidate_box["x"]) <= 2, sections
+            comparison_bottom = review_box["y"] + review_box["height"]
         grid_box = grid.bounding_box()
+        (tmp_path / f"grid-dimensions-{size}.json").write_text(
+            json.dumps(grid_box, indent=2), encoding="utf-8"
+        )
         assert grid_box is not None and grid_box["width"] >= candidate_box["width"] - 40
-        assert 318 <= grid_box["height"] <= 322, grid_box
+        assert grid_box["height"] > 340, grid_box
+        if width > 600:
+            spare_below_table = (
+                candidate_box["y"] + candidate_box["height"] - (grid_box["y"] + grid_box["height"])
+            )
+            assert spare_below_table <= 90, (candidate_box, grid_box, spare_below_table)
         dimensions = chart.locator(".js-plotly-plot").evaluate("""plot => ({
             width: plot._fullLayout._size.w,
             height: plot._fullLayout._size.h,
             font: plot._fullLayout.font.size,
         })""")
         assert dimensions["height"] >= 160, dimensions
+        if row_count == 2:
+            assert chart.bounding_box()["height"] >= 360
+            assert dimensions["height"] >= 260, dimensions
         assert dimensions["width"] >= (500 if width > 600 else 300), dimensions
         assert dimensions["font"] >= 12, dimensions
         if width > 600:
@@ -381,11 +410,11 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             "heading", name="Sådan læses analysen", exact=True
         ).bounding_box()
         assert method_box is not None
-        assert method_box["y"] > review_box["y"] + review_box["height"]
+        assert method_box["y"] > comparison_bottom
         assert method_box["width"] <= min(1100, width - 32) + 1, method_box
         documentation_box = documentation.bounding_box()
         assert documentation_box is not None
-        assert documentation_box["y"] > review_box["y"] + review_box["height"]
+        assert documentation_box["y"] > comparison_bottom
         overflow = page.evaluate("""() => ({
             viewport: innerWidth,
             page: document.documentElement.scrollWidth,
@@ -437,6 +466,9 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             "alternative_count": row_count,
             "alternative_layout": row_layout,
         }
+        (tmp_path / "layout-metrics.json").write_text(
+            json.dumps(metrics, indent=2), encoding="utf-8"
+        )
         if width > 600:
             queue.evaluate("""e => {
                 e.scrollIntoView({block:'start'});
@@ -464,7 +496,7 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             ("table", grid),
             ("prices", prices),
             ("chart", chart),
-            ("review", form),
+            *((("review", form),) if form.count() else ()),
         ):
             target.evaluate("""e => {
                 e.scrollIntoView({block:'start'});
@@ -540,9 +572,21 @@ def test_descriptive_layout(browser: Browser, workspace_url: str, tmp_path: Path
         for product_id in ("000002", "000003", "900001"):
             _toggle_alternative(page, product_id)
         expect(
-            page.locator(".st-key-price_workspace").get_by_role("button", name="Vurder", exact=True)
+            page.locator(".st-key-price_workspace").get_by_role("button", name="Vis", exact=True)
         ).to_have_count(3)
         _linked_layout_evidence(page, tmp_path)
+        expect(page.locator(".st-key-review_editor")).to_have_count(0)
+        # Group 3 is healthy; group 2 intentionally contains a conflicting fixture row.
+        _select(page, "Kandidat i den viste liste", "000007")
+        small_group = tmp_path / "small-group"
+        small_group.mkdir()
+        _linked_layout_evidence(page, small_group)
+        expect(page.locator(".st-key-review_editor")).to_have_count(0)
+        _select(page, "Kandidat i den viste liste", "000004")
+        expect(page.get_by_text("Der er uafklarede rækker i gruppen.", exact=False)).to_be_visible()
+        page.locator(".st-key-price_workspace").screenshot(
+            path=str(tmp_path / "incomplete-group-warning.png")
+        )
         for size, width, height in (("laptop", 1366, 768), ("desktop", 1920, 1080)):
             page.set_viewport_size({"width": width, "height": height})
             for section, label in (
@@ -591,6 +635,7 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
     page.set_default_timeout(10000)
     try:
         _load(page, workspace_url, tmp_path, count=6)
+        _show_review(page)
         _keyboard_picker(page)
         selector = page.get_by_role("combobox", name="Kandidat i den viste liste", exact=True)
         # Human names are searchable while product IDs remain the review owner.
@@ -626,6 +671,35 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         expect(selector).to_have_value("000002 · Eksempelpakning 2")
         expect(note).to_have_value("Ugemt kladde til vare 2")
         expect(_alternative(page, "900001")).to_be_checked()
+        _select(page, "Vurdering", "Undersøg nærmere")
+        page.get_by_text("Føj varen til min eksportliste", exact=True).click()
+        _settled(page)
+        _show_review(page, enabled=False)
+        page.get_by_role("button", name="Næste kandidat", exact=True).click()
+        _settled(page)
+        expect(selector).to_have_value("000003 · Eksempelpakning 3")
+        page.get_by_text("26 perioder", exact=True).click()
+        _settled(page)
+        expect(page.locator(".st-key-review_editor")).to_have_count(0)
+        page.get_by_role("button", name="Forrige kandidat", exact=True).click()
+        _settled(page)
+        expect(selector).to_have_value("000002 · Eksempelpakning 2")
+        expect(_alternative(page, "900001")).to_be_checked()
+        page.get_by_text("Eksport og sessionskopi", exact=True).click()
+        unsaved = json.loads(_download(page, "Hent sessionskopi (JSON)", tmp_path).read_bytes())
+        assert "000002" not in unsaved["reviews"]
+        page.get_by_text("Eksport og sessionskopi", exact=True).click()
+        _show_review(page)
+        expect(note).to_have_value("Ugemt kladde til vare 2")
+        expect(page.get_by_role("combobox", name="Vurdering", exact=True)).to_have_value(
+            "Undersøg nærmere"
+        )
+        expect(
+            page.get_by_role("checkbox", name="Føj varen til min eksportliste", exact=True)
+        ).to_be_checked()
+        expect(page.get_by_text("Ugemte ændringer.", exact=False)).to_be_visible()
+        page.get_by_text("Alle", exact=True).click()
+        _settled(page)
         _toggle_alternative(page, "900001", checked=False)
         page.get_by_role("button", name="Næste kandidat", exact=True).click()
         expect(selector).to_have_value("000003 · Eksempelpakning 3")
@@ -694,6 +768,7 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         page.get_by_text("Eksport og sessionskopi", exact=True).click()
         saved = _download(page, "Hent sessionskopi (JSON)", tmp_path)
         payload = json.loads(saved.read_bytes())
+        assert payload["analysis_id"] == unsaved["analysis_id"]
         assert payload["reviews"]["000002"]["note"] == "Ugemt kladde til vare 2"
         assert "000001" not in payload["reviews"]
         assert "900004" not in payload["reviews"]
@@ -765,6 +840,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
     page.set_default_timeout(10000)
     try:
         _load(page, workspace_url, tmp_path)
+        _show_review(page)
         page.get_by_role("button", name="Filtre", exact=True).click()
         expect(
             page.get_by_role("combobox", name="Vis kun denne substitutionsgruppe", exact=True)
@@ -983,6 +1059,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             expect(isolated.get_by_role("textbox", name="Note", exact=True)).to_have_count(0)
             expect(isolated.get_by_text("synthetic-cito.xlsx", exact=False)).to_have_count(0)
             _load(isolated, workspace_url, tmp_path, count=3)
+            _show_review(isolated)
             expect(isolated.get_by_role("textbox", name="Note", exact=True)).to_have_value("")
             isolated.get_by_role("textbox", name="Note", exact=True).fill("Anden session")
             isolated.get_by_role("button", name="Gem vurdering", exact=True).click()
