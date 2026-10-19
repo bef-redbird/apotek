@@ -201,6 +201,30 @@ def test_substitutes_use_product_id_and_company_with_full_descriptions_in_detail
     assert not app.exception
 
 
+def test_live_session_without_new_metadata_keeps_comparison_and_draft() -> None:
+    analysis = synthetic_analysis(3)
+    # Simulate an analysis retained in session_state across a source-code reload.
+    del analysis.history.companies
+    app = loaded_app(analysis)
+    aid = analysis.analysis_id
+    note_key = f"review_note_{aid}_000001"
+    app.text_area(key=note_key).input("Bevar min åbne kladde").run()
+    app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
+    candidate_picker(app).select("000002").run()
+    candidate_picker(app).select("000001").run()
+    assert app.text_area(key=note_key).value == "Bevar min åbne kladde"
+    assert app.checkbox(key=f"overlay_{aid}_000001_000002").value
+    assert any(t.value == "Firma ikke oplyst" for t in app.text)
+    assert app.session_state["analysis"].analysis_id == aid
+    assert app.session_state["review"].inspected_id == "000001"
+    assert app.session_state["review"].reviews == {}
+    assert [t.name for t in history_chart(analysis, "000001", ("000002",)).data] == [
+        "000001",
+        "000002",
+    ]
+    assert not app.exception
+
+
 def test_comparison_choices_survive_product_switches() -> None:
     app = loaded_app(synthetic_analysis(3))
     aid = "synthetic-analysis"

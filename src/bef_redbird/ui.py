@@ -519,6 +519,8 @@ def _group_comparison(
     analysis: AnalysisResult, product_id: str, controls: DeltaGenerator
 ) -> tuple[str, ...]:
     group = analysis.group_members(product_id)
+    # A live session loaded before company metadata was added may lack this field.
+    companies = getattr(analysis.history, "companies", {})
     alternatives = [item for item in group if item.product_id != product_id]
     choices = st.session_state.setdefault(f"overlay_choices_{analysis.analysis_id}", {})
     available = {
@@ -578,7 +580,7 @@ def _group_comparison(
                 detail += " · Aktuel AIP mangler; kun kendte observationer vises."
             if item.storage_code in ("H", "K"):
                 detail += f" · Opbevaring {item.storage_code}: fravalgt af indkøbsfilteret."
-            company = analysis.history.companies.get(pid, "Firma ikke oplyst")
+            company = companies.get(pid, "Firma ikke oplyst")
             company_label = company
             if item.storage_code in ("H", "K"):
                 company_label = f"Opb. {item.storage_code} · {company}"
@@ -638,7 +640,7 @@ def _group_comparison(
                 st.markdown(f"**{pid} · {role}**")
                 # Source descriptions wrap as plain text; never widen a comparison table.
                 st.text(analysis.history.labels.get(pid, "Navn ikke oplyst"))
-                st.text(f"Firma: {analysis.history.companies.get(pid, 'Ikke oplyst')}")
+                st.text(f"Firma: {companies.get(pid, 'Ikke oplyst')}")
                 st.text(
                     f"Cito-kostpris: {_money(item.current_cost_ore)} kr. · "
                     f"Prisklasse: {item.current_code} → {item.upcoming_code}"
