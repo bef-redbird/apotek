@@ -292,6 +292,17 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
     rows = prices.locator('[class*="st-key-alternative_"]')
     row_count = rows.count()
     assert row_count in (6, 12)
+    expect(
+        prices.get_by_test_id("stMarkdownContainer").filter(
+            has_text=re.compile(rf"^Substitutionsalternativer: {row_count} · \d valgt\s*$")
+        )
+    ).to_be_visible()
+    for choice in ("Alle", "26 perioder", "52 perioder"):
+        expect(prices.get_by_role("radio", name=choice, exact=True)).to_be_visible()
+    expect(prices.get_by_role("checkbox", name="Senere priser", exact=True)).to_be_visible()
+    expect(page.get_by_role("button", name="Flere grafvalg", exact=True)).to_have_count(0)
+    for link in ("Se den valgte kandidats priser", "Gem din vurdering", "Til kandidatlisten"):
+        expect(page.get_by_role("link", name=link, exact=True)).to_have_count(0)
     expect(prices.get_by_text(re.compile(r"^Vis flere alternativer"))).to_have_count(0)
     for row in rows.all():
         # Every alternative is a direct, visible row with aligned native fields.
@@ -440,10 +451,13 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             if row_count <= 6:
                 for row in rows.all():
                     expect(row).to_be_in_viewport(ratio=1)
-                for label in ("Gruppedetaljer", "Flere grafvalg"):
+                for label in ("Gruppedetaljer",):
                     expect(prices.get_by_role("button", name=label, exact=True)).to_be_in_viewport(
                         ratio=1
                     )
+                for choice in ("Alle", "26 perioder", "52 perioder"):
+                    expect(prices.get_by_text(choice, exact=True)).to_be_in_viewport(ratio=1)
+                expect(prices.get_by_text("Senere priser", exact=True)).to_be_in_viewport(ratio=1)
             page.screenshot(path=str(tmp_path / f"linked-whole-workspace-{size}.png"))
         for section, target in (
             ("controls", queue),
@@ -593,21 +607,26 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         note.press("Tab")
         expect(page.get_by_text("Ugemte ændringer.", exact=False)).to_be_visible()
         _settled(page)
-        # Native anchor navigation changes only the scroll target, preserving the draft owner.
-        for section, label, anchor in (
-            (".st-key-review_editor", "Til kandidatlisten", "kandidater"),
-            (".st-key-candidate_list", "Se den valgte kandidats priser", "priser"),
-            (".st-key-price_workspace", "Gem din vurdering", "vurdering"),
-        ):
-            page.locator(section).get_by_role("link", name=label, exact=True).click()
-            expect(page).to_have_url(re.compile(rf"#{anchor}$"))
+        # Direct graph controls preserve the selected review owner and its unsaved draft.
+        _toggle_alternative(page, "900001")
+        for choice, periods in (("26 perioder", 26), ("52 perioder", 40), ("Alle", 40)):
+            page.get_by_text(choice, exact=True).click()
+            _settled(page)
+            expect(page.get_by_role("radio", name=choice, exact=True)).to_be_checked()
+            page.wait_for_function(
+                "n => document.querySelector('.js-plotly-plot').data[0].x.length === n", arg=periods
+            )
             expect(selector).to_have_value("000002 · Eksempelpakning 2")
             expect(note).to_have_value("Ugemt kladde til vare 2")
-        page.get_by_role("button", name="Flere grafvalg", exact=True).click()
-        page.get_by_role("link", name="Beregninger og metode", exact=True).click()
-        expect(page).to_have_url(re.compile(r"#metode$"))
+            expect(_alternative(page, "900001")).to_be_checked()
+        later = page.get_by_role("checkbox", name="Senere priser", exact=True)
+        later.press("Space")
+        _settled(page)
+        expect(later).to_be_checked()
+        expect(selector).to_have_value("000002 · Eksempelpakning 2")
         expect(note).to_have_value("Ugemt kladde til vare 2")
-        page.keyboard.press("Escape")
+        expect(_alternative(page, "900001")).to_be_checked()
+        _toggle_alternative(page, "900001", checked=False)
         page.get_by_role("button", name="Næste kandidat", exact=True).click()
         expect(selector).to_have_value("000003 · Eksempelpakning 3")
         _settled(page)
@@ -840,10 +859,9 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         _select(page, "Hvilke kandidater vil du se?", "Alle prioriterbare")
         expect(page.get_by_text("Alle 120 prioriterbare kandidater.", exact=False)).to_be_visible()
         _settled(page)
-        page.get_by_role("button", name="Flere grafvalg", exact=True).click()
-        page.get_by_text("Seneste 26 perioder", exact=True).click()
-        expect(page.get_by_role("radio", name="Seneste 26 perioder", exact=True)).to_be_checked()
-        page.get_by_text("Vis også priser efter den valgte periode", exact=True).click()
+        page.get_by_text("26 perioder", exact=True).click()
+        expect(page.get_by_role("radio", name="26 perioder", exact=True)).to_be_checked()
+        page.get_by_role("checkbox", name="Senere priser", exact=True).press("Space")
         _select(page, "Kandidat i den viste liste", "000001")
         expect(
             page.get_by_test_id("stText").filter(

@@ -62,14 +62,16 @@ The workspace shows the candidate list on the left and price comparison on the r
 with matching panel heights and an assessment below both. The compact comparison is
 designed for a laptop viewport when scrolled to the workspace; larger groups, warnings
 and expanded keyboard controls need more space. The two panels stack on narrow screens;
-previous/next navigation stays with the selected medicine. In-page links jump to
-prices, assessment and explanations. Every found alternative is shown directly, with
-product number, LMS company, package AIP and current/upcoming classes aligned in each row.
+previous/next navigation stays with the selected medicine. Every found alternative is
+shown directly, with product number, LMS company, package AIP and current/upcoming
+classes aligned in each row.
 Shared medicine names and dosage descriptions stay in help and **Gruppedetaljer**;
 the latter uses wrapping product cards rather than a wide table. Missing prices and
 H/K storage markers remain on the rows; missing-history controls explain why no curve
-can be shown. Chart legends use product number and company. **Flere grafvalg** holds
-the chart's period range and retrospective options; **Filtre** holds group/review filters.
+can be shown. The heading gives the actual number of found alternatives and how many
+are selected; the five-curve limit is explained separately. Chart legends use product
+number and company. Period-range options and **Senere priser** are directly visible
+above the chart, alongside **Gruppedetaljer**; **Filtre** holds group/review filters.
 Import and export controls stay in disclosures.
 Per-product comparison choices survive product changes; a prepared Excel download
 survives inspection changes but is invalidated when saved reviews or its scope change.

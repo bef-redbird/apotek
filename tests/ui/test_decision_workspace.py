@@ -256,7 +256,9 @@ def test_alternatives_are_group_scoped_and_limit_is_explicit() -> None:
     assert app.checkbox(key=f"overlay_{aid}_000001_000007").disabled
     assert not app.checkbox(key=f"overlay_{aid}_000001_000006").disabled
     assert any(
-        "5/5" in item.value and "Fem alternativer er valgt" in item.help
+        "Substitutionsalternativer: 6" in item.value
+        and "5 valgt" in item.value
+        and "Fem alternativer er valgt" in item.help
         for item in app.markdown
         if item.help
     )
@@ -271,6 +273,47 @@ def test_alternatives_are_group_scoped_and_limit_is_explicit() -> None:
         "000007",
     ]
     assert app.session_state["review"].inspected_id == "000001"
+    assert not app.exception
+
+
+@pytest.mark.parametrize("members", [1, 3, 6, 8])
+def test_alternative_count_is_actual_group_size_not_chart_limit(members: int) -> None:
+    analysis = synthetic_analysis(members)
+    app = loaded_app(analysis)
+    aid = analysis.analysis_id
+    # Narrowing the candidate queue must not narrow the substitute group.
+    app.text_input(key="search").input("000001").run()
+    heading = next(m for m in app.markdown if "Substitutionsalternativer:" in m.value)
+    assert heading.value == f"**Substitutionsalternativer: {members - 1}** · 0 valgt"
+    assert "Højst fem alternativkurver" in heading.help
+    alternatives = [c for c in app.checkbox if str(c.key).startswith(f"overlay_{aid}_")]
+    assert len(alternatives) == members - 1
+    if alternatives:
+        alternatives[0].check().run()
+        heading = next(m for m in app.markdown if "Substitutionsalternativer:" in m.value)
+        assert heading.value == f"**Substitutionsalternativer: {members - 1}** · 1 valgt"
+    assert app.session_state["review"].inspected_id == "000001"
+    assert not app.exception
+
+
+def test_direct_graph_controls_preserve_the_active_review() -> None:
+    app = loaded_app(synthetic_analysis(3))
+    aid = "synthetic-analysis"
+    note_key = f"review_note_{aid}_000001"
+    app.text_area(key=note_key).input("Kladde med synlige grafvalg").run()
+    app.radio(key="chart_window").set_value("Seneste 26 perioder").run()
+    app.checkbox(key="retrospective").check().run()
+    assert app.radio(key="chart_window").value == "Seneste 26 perioder"
+    assert app.checkbox(key="retrospective").value
+    assert app.text_area(key=note_key).value == "Kladde med synlige grafvalg"
+    assert app.session_state["review"].inspected_id == "000001"
+    assert app.session_state["analysis"].analysis_id == aid
+    for text in (
+        "[Se den valgte kandidats priser]",
+        "[Gem din vurdering]",
+        "[Til kandidatlisten]",
+    ):
+        assert not any(text in m.value for m in app.markdown)
     assert not app.exception
 
 
