@@ -76,12 +76,6 @@ def _open_product(analysis_id: str, product_id: str) -> None:
     st.session_state[key] = st.session_state.get(key, 0) + 1
 
 
-def _choose_product(analysis_id: str, selector: str) -> None:
-    chosen = st.session_state.get(selector)
-    if chosen is not None:
-        _open_product(analysis_id, chosen)
-
-
 def _toggle_alternative(analysis_id: str, product_id: str, alternative_id: str) -> None:
     # Keep per-candidate choices outside widget state: Streamlit removes widgets
     # belonging to the previous candidate after navigation.
@@ -448,9 +442,6 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
     key = f"table_{analysis.analysis_id}_{generation}"
     frame = pd.DataFrame(rows)
     frame["Prioritet"] = frame["Prioritet"].astype("Int64")
-    alternative_count = len(analysis.group_members(review.inspected_id or ids[0])) - 1
-    # A useful native table height also survives the stacked narrow-screen layout.
-    table_height = min(600, 380 + 32 * max(0, alternative_count - 6))
     # The callback captures exactly the IDs supplied to this rendered dataframe.
     st.dataframe(
         frame.style.format(
@@ -462,7 +453,7 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
         ),
         hide_index=True,
         width="stretch",
-        height=table_height,
+        height=420,
         row_height=36,
         selection_mode="single-row",
         on_select=partial(_inspect_table, key, ids, analysis.analysis_id),
@@ -474,23 +465,6 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
             "Kostpris (DKK)": st.column_config.NumberColumn("Kostpris, kr.", width=100),
         },
     )
-    with st.expander("Vælg fra listen med tastatur"):
-        # Streamlit keeps keyed selectboxes mounted when options change. Remount
-        # for a new visible list so stale client-side search cannot hide its rows.
-        scope = hashlib.sha256(json.dumps(ids).encode()).hexdigest()[:16]
-        selector = f"queue_pick_{analysis.analysis_id}_{scope}"
-        st.session_state[selector] = review.inspected_id if review.inspected_id in ids else None
-        st.selectbox(
-            "Kandidat i den viste liste",
-            ids,
-            index=None,
-            placeholder="Vælg en kandidat fra tabellen",
-            format_func=lambda pid: _label(analysis, pid),
-            key=selector,
-            on_change=_choose_product,
-            args=(analysis.analysis_id, selector),
-            help="Samme kandidater som i tabellen, efter søgning og filtre.",
-        )
     return ids
 
 
@@ -747,14 +721,17 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
             st.subheader("2. Sammenlign priser", anchor="priser", width="content")
             st.button(
                 "Forrige kandidat",
-                type="tertiary",
+                type="secondary",
+                icon=":material/chevron_left:",
                 disabled=index <= 0,
                 on_click=_open_product,
                 args=(analysis.analysis_id, visible[max(index - 1, 0)] if visible else product_id),
             )
             st.button(
                 "Næste kandidat",
-                type="tertiary",
+                type="secondary",
+                icon=":material/chevron_right:",
+                icon_position="right",
                 disabled=index < 0 or index >= len(visible) - 1,
                 on_click=_open_product,
                 args=(
@@ -850,26 +827,20 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
                 "senere observationer markeres i grafen og indgår aldrig i prioriteringen."
             ),
         )
-        chart_area = st.container(height="stretch")
+        chart_area = st.container()
         with st.container(gap=None):
             overlays = _group_comparison(analysis, product_id, details_control)
         limit = {"Hele historikken": None, "Seneste 26 perioder": 26, "Seneste 52 perioder": 52}[
             view
         ]
         with chart_area:
-            # Use spare room for the graph in small groups without pushing a
-            # six-alternative comparison below an ordinary laptop viewport.
-            alternative_count = sum(
-                item.product_id != product_id for item in analysis.group_members(product_id)
-            )
             figure = history_chart(
                 analysis, product_id, overlays, retrospective=retrospective, view_periods=limit
             )
-            figure.update_layout(height=max(260, 440 - 36 * alternative_count))
             st.plotly_chart(
                 figure,
                 width="stretch",
-                height="stretch",
+                height=360,
                 key=f"history_{product_id}",
                 config={"displaylogo": False, "scrollZoom": False},
             )

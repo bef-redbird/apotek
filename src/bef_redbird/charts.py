@@ -31,7 +31,7 @@ def history_chart(
         dates = dates[-view_periods:]
     indices = {period: i for i, period in enumerate(periods)}
     figure = go.Figure()
-    colors = ("#365D52", "#7C6594", "#B27D3C", "#477D95", "#995D69", "#7A7C49")
+    colors = ("#1D4F45", "#0072B2", "#B45309", "#7B4EA3", "#B23A48", "#64731C")
     ids = (product_id, *tuple(dict.fromkeys(overlays))[:5])
     dashes = ("solid", "dash", "dot", "dashdot", "longdash", "longdashdot")
     symbols = ("circle", "square", "diamond", "triangle-up", "cross", "x")
@@ -46,11 +46,11 @@ def history_chart(
                 else None
             )
             values.append(value / 100 if value is not None else None)
-        label = analysis.history.labels.get(item_id, "Navn ikke oplyst")
         company = companies.get(item_id, "")
         # Substitutes often share a name; keep ID and company as the visible identity.
         short_company = company if len(company) <= 12 else company[:9] + "…"
         legend_label = f"{item_id} · {short_company}" if company else item_id
+        hover_company = company if len(company) <= 24 else company[:21] + "…"
         figure.add_trace(
             go.Scatter(
                 x=dates,
@@ -65,10 +65,11 @@ def history_chart(
                     "width": 3.5 if index == 0 else 2.5,
                     "dash": dashes[index],
                 },
-                marker={"size": 6, "symbol": symbols[index]},
+                marker={"size": 7, "symbol": symbols[index], "maxdisplayed": 24},
                 hovertemplate=(
-                    f"{escape(label)}<br>Varenr. {item_id}<br>Periode %{{x|%d-%m-%Y}}<br>"
-                    "AIP %{y:.2f} DKK<br>LMS · observeret pris<extra></extra>"
+                    f"<b>{item_id}</b>"
+                    + (f" · {escape(hover_company)}" if hover_company else "")
+                    + "<br>AIP %{y:.2f} kr.<extra></extra>"
                 ),
             )
         )
@@ -83,26 +84,46 @@ def history_chart(
             annotation_position="top left",
         )
     figure.update_layout(
-        height=260,
-        margin={"l": 12, "r": 20, "t": 8, "b": 4},
+        height=360,
+        # Reserve legend space so adding curves never resizes the plot area.
+        margin={"l": 74, "r": 16, "t": 76, "b": 40, "autoexpand": False},
         xaxis_tickformat="%d-%m-%Y",
         separators=",.",
         yaxis_title="AIP pr. pakning (DKK)",
         yaxis_tickformat=".2f",
-        showlegend=bool(overlays),
+        showlegend=True,
         legend={
             "orientation": "h",
-            "y": 1,
+            "y": 1.02,
             "yanchor": "bottom",
             "x": 0,
             "font": {"size": 13},
-            "maxheight": 0.2,
+            "maxheight": 0.25,
         },
-        font={"size": 14, "color": "#202621"},
-        hovermode="closest",
+        font={"size": 14, "color": "#20372F"},
+        hovermode="x unified",
+        hoverlabel={
+            "bgcolor": "#FFFFFF",
+            "bordercolor": "#A9BFB4",
+            "font": {"size": 13, "color": "#20372F"},
+        },
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="#FFFFFF",
     )
-    figure.update_xaxes(showgrid=True, gridcolor="#E4E7E3", showline=True, linecolor="#9AA69F")
-    figure.update_yaxes(showgrid=True, gridcolor="#E4E7E3", showline=True, linecolor="#9AA69F")
+    figure.update_xaxes(
+        showgrid=True,
+        gridcolor="#E5ECE8",
+        showline=True,
+        linecolor="#A9BFB4",
+        tickfont={"size": 12, "color": "#42594F"},
+        unifiedhovertitle={"text": "Periode %{x|%d-%m-%Y} · LMS"},
+    )
+    figure.update_yaxes(
+        showgrid=True,
+        gridcolor="#E5ECE8",
+        showline=True,
+        linecolor="#A9BFB4",
+        tickfont={"size": 12, "color": "#42594F"},
+        title={"font": {"size": 13, "color": "#20372F"}},
+    )
     return figure
