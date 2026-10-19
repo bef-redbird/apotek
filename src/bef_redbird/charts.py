@@ -35,6 +35,7 @@ def history_chart(
     ids = (product_id, *tuple(dict.fromkeys(overlays))[:5])
     dashes = ("solid", "dash", "dot", "dashdot", "longdash", "longdashdot")
     symbols = ("circle", "square", "diamond", "triangle-up", "cross", "x")
+    companies = getattr(analysis.history, "companies", {})
     for index, item_id in enumerate(dict.fromkeys(ids)):
         prices = analysis.history.prices.get(item_id, ())
         values = []
@@ -46,13 +47,15 @@ def history_chart(
             )
             values.append(value / 100 if value is not None else None)
         label = analysis.history.labels.get(item_id, "Navn ikke oplyst")
-        # IDs stay available as trace metadata; human labels are escaped for Plotly HTML.
-        short_label = label if len(label) <= 12 else label[:9] + "…"
+        company = companies.get(item_id, "")
+        # Substitutes often share a name; keep ID and company as the visible identity.
+        short_company = company if len(company) <= 12 else company[:9] + "…"
+        legend_label = f"{item_id} · {short_company}" if company else item_id
         figure.add_trace(
             go.Scatter(
                 x=dates,
                 y=values,
-                name=escape(f"{item_id} · {short_label}"),
+                name=escape(legend_label),
                 meta=item_id,
                 mode="lines+markers",
                 connectgaps=False,

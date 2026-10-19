@@ -118,11 +118,12 @@ def test_all_group_members_are_comparable_without_changing_review_owner() -> Non
     # Noncandidate H/K products are available in the same group checklist.
     app.checkbox(key=f"overlay_{aid}_000001_900001").check().run()
     assert app.session_state["review"].inspected_id == "000001"
-    assert "Opb. H" in app.checkbox(key=f"overlay_{aid}_000001_900001").label
+    assert app.checkbox(key=f"overlay_{aid}_000001_900001").label == "900001"
+    assert any(t.value.startswith("Opb. H · ") for t in app.text)
     assert "Opbevaring H" in app.checkbox(key=f"overlay_{aid}_000001_900001").help
     assert not any(b.key == "open_alternative_000001_900001" for b in app.button)
     assert app.checkbox(key=f"overlay_{aid}_000001_900002").disabled
-    assert "Historik mangler" in app.checkbox(key=f"overlay_{aid}_000001_900002").label
+    assert "Historik mangler" in app.checkbox(key=f"overlay_{aid}_000001_900002").help
     assert "ingen kurve kan vises" in app.checkbox(key=f"overlay_{aid}_000001_900002").help
     app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
     app.button(key="open_alternative_000001_000002").click().run()
@@ -143,10 +144,12 @@ def test_all_group_members_are_comparable_without_changing_review_owner() -> Non
 def test_empty_name_fallback_and_chart_identity_are_safe() -> None:
     analysis = synthetic_analysis(2)
     analysis.history.labels = {"000002": "<b>Same name</b> · 20 mg"}
+    analysis.history.companies = {"000002": "<b>Firma</b>"}
     app = loaded_app(analysis)
     assert "Navn ikke oplyst" in candidate_picker(app).options[0]
     chart = history_chart(analysis, "000001", ("000002",))
     assert [trace.meta for trace in chart.data] == ["000001", "000002"]
+    assert chart.data[0].name == "000001"
     assert "&lt;b&gt;" in chart.data[1].name
     assert "&lt;b&gt;Same name&lt;/b&gt; · 20 mg" in chart.data[1].hovertemplate
     assert chart.data[0].line.dash != chart.data[1].line.dash
@@ -168,11 +171,57 @@ def test_unsaved_only_replacement_requires_acknowledgement() -> None:
 def test_singleton_group_still_shows_source_context() -> None:
     app = loaded_app(synthetic_analysis(1))
     assert any("Ingen andre varer" in c.value for c in app.caption)
-    group = next(frame.value for frame in app.dataframe if "Rolle" in frame.value.columns)
-    assert len(group) == 1
-    assert group.iloc[0]["Rolle"] == "Valgt kandidat"
-    assert group.iloc[0]["Vare"].startswith("000001 · ")
-    assert group.iloc[0]["Historik"] == "Fundet"
+    assert any("000001 · Valgt kandidat" in m.value for m in app.markdown)
+    assert any(t.value == "Syntetisk vare 000001" for t in app.text)
+    assert any(t.value == "Historik: Fundet" for t in app.text)
+    assert not any("Rolle" in frame.value.columns for frame in app.dataframe)
+    assert not app.exception
+
+
+def test_substitutes_use_product_id_and_company_with_full_descriptions_in_details() -> None:
+    analysis = synthetic_analysis(3)
+    description = "Samme lægemiddel · 20 mg · tabletter · 100 stk."
+    analysis.history.labels = dict.fromkeys(analysis.history.prices, description)
+    analysis.history.companies = {"000001": "Firma A", "000002": "Firma B", "000003": "Firma C"}
+    app = loaded_app(analysis)
+    alternatives = [c for c in app.checkbox if str(c.key).startswith("overlay_")]
+    assert [c.label for c in alternatives] == ["000002", "000003"]
+    assert all(description in c.help for c in alternatives)
+    assert {"Firma B", "Firma C"}.issubset({t.value for t in app.text})
+    assert sum(t.value == description for t in app.text) == 3
+    assert any(t.value == "Cito-kostpris: 120,00 kr. · Prisklasse: A → C" for t in app.text)
+    chart = history_chart(analysis, "000001", ("000002", "000003"))
+    assert [trace.name for trace in chart.data] == [
+        "000001 · Firma A",
+        "000002 · Firma B",
+        "000003 · Firma C",
+    ]
+    assert app.session_state["analysis"].analysis_id == analysis.analysis_id
+    assert app.session_state["review"].inspected_id == "000001"
+    assert not app.exception
+
+
+def test_live_session_without_new_metadata_keeps_comparison_and_draft() -> None:
+    analysis = synthetic_analysis(3)
+    # Simulate an analysis retained in session_state across a source-code reload.
+    del analysis.history.companies
+    app = loaded_app(analysis)
+    aid = analysis.analysis_id
+    note_key = f"review_note_{aid}_000001"
+    app.text_area(key=note_key).input("Bevar min åbne kladde").run()
+    app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
+    candidate_picker(app).select("000002").run()
+    candidate_picker(app).select("000001").run()
+    assert app.text_area(key=note_key).value == "Bevar min åbne kladde"
+    assert app.checkbox(key=f"overlay_{aid}_000001_000002").value
+    assert any(t.value == "Firma ikke oplyst" for t in app.text)
+    assert app.session_state["analysis"].analysis_id == aid
+    assert app.session_state["review"].inspected_id == "000001"
+    assert app.session_state["review"].reviews == {}
+    assert [t.name for t in history_chart(analysis, "000001", ("000002",)).data] == [
+        "000001",
+        "000002",
+    ]
     assert not app.exception
 
 

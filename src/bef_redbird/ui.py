@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 from dataclasses import asdict
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -520,6 +519,8 @@ def _group_comparison(
     analysis: AnalysisResult, product_id: str, controls: DeltaGenerator
 ) -> tuple[str, ...]:
     group = analysis.group_members(product_id)
+    # A live session loaded before company metadata was added may lack this field.
+    companies = getattr(analysis.history, "companies", {})
     alternatives = [item for item in group if item.product_id != product_id]
     choices = st.session_state.setdefault(f"overlay_choices_{analysis.analysis_id}", {})
     available = {
@@ -534,13 +535,15 @@ def _group_comparison(
         else -1
     )
 
-    names, prices, codes, _ = st.columns([5.5, 1.6, 1.2, 1.2], gap="xsmall")
+    names, prices, codes, _ = st.columns([4.9, 1.35, 1.4, 1.15], gap="xsmall")
     names.markdown(
         f"**Substitutionsalternativer** · {len(selected)}/5",
         help=(
             "Fundne alternativer i rapporten · "
             f"Gruppe {analysis.candidates[product_id].item.group_id or 'ikke oplyst'}. "
-            "Sæt flueben for at vise en kurve. Fjern det for at skjule kurven. "
+            "Alle fundne alternativer vises med varenummer, firma, AIP og prisklasse. "
+            "Firma er som angivet i LMS. Sæt flueben for at vise en kurve. "
+            "Fjern det for at skjule kurven. "
             "Kun den aktuelle rapports gruppe; fuldstændighed er ikke verificeret."
             + (
                 " Fem alternativer er valgt. Fjern et flueben for at vælge et andet."
@@ -549,17 +552,16 @@ def _group_comparison(
             )
         ),
     )
-    prices.caption("LMS, kr.", text_alignment="right")
+    prices.caption(
+        "LMS, kr.",
+        text_alignment="right",
+        help="AIP pr. pakning i den valgte periode. Kontrollér styrke og pakning; ikke enhedspris.",
+    )
     codes.caption("Nu → næste", text_alignment="center")
     if not alternatives:
         st.caption("Ingen andre varer fundet i rapportens gruppe.")
     else:
-        for position, item in enumerate(alternatives):
-            # The first few choices are immediately visible; a large group does
-            # not turn into an unbounded wall of controls. Every member is retained.
-            if position == 3:
-                more = controls.popover(f"Vis flere alternativer ({len(alternatives) - 3})")
-            target = st if position < 3 else more
+        for item in alternatives:
             pid = item.product_id
             values = analysis.history.prices.get(pid, ())
             aip = values[index] if 0 <= index < len(values) else None
@@ -578,29 +580,39 @@ def _group_comparison(
                 detail += " · Aktuel AIP mangler; kun kendte observationer vises."
             if item.storage_code in ("H", "K"):
                 detail += f" · Opbevaring {item.storage_code}: fravalgt af indkøbsfilteret."
-            name = analysis.history.labels.get(pid, "Navn ikke oplyst")
-            short_name = name if len(name) <= 42 else name[:39] + "…"
-            label = pid
+            company = companies.get(pid, "Firma ikke oplyst")
+            company_label = company
             if item.storage_code in ("H", "K"):
-                label += f" · Opb. {item.storage_code}"
-            if pid not in available:
-                label += " · Historik mangler"
-            label += f" · {short_name}"
-            # Source labels remain literal Markdown; full names are in the tooltip.
-            label = re.sub(r"([\\`*_{}\[\]()<>#+!|~>-])", r"\\\1", label)
-            with target.container(key=f"alternative_{product_id}_{pid}", gap=None):
-                name_col, price_col, code_col, action_col = st.columns(
-                    [5.5, 1.6, 1.2, 1.2], gap="xsmall", vertical_alignment="center"
+                company_label = f"Opb. {item.storage_code} · {company}"
+            with st.container(key=f"alternative_{product_id}_{pid}", gap=None):
+                id_col, company_col, price_col, code_col, action_col = st.columns(
+                    [1.55, 3.35, 1.35, 1.4, 1.15], gap="xsmall", vertical_alignment="center"
                 )
-                name_col.checkbox(
-                    label,
+                id_col.checkbox(
+                    pid,
                     key=key,
                     disabled=pid not in available or (len(selected) >= 5 and pid not in selected),
                     on_change=_toggle_alternative,
                     args=(analysis.analysis_id, product_id, pid),
                     help=detail,
                 )
-                price_col.markdown(f"**{_money(aip)}**", text_alignment="right")
+                company_col.text(
+                    company_label,
+                    wrap=False,
+                    help=f"Firma i LMS: {company}. "
+                    + (
+                        f"Opbevaring {item.storage_code}: fravalgt af indkøbsfilteret."
+                        if item.storage_code in ("H", "K")
+                        else ""
+                    ),
+                )
+                price_col.markdown(
+                    f"**{_money(aip)}**",
+                    text_alignment="right",
+                    help="Historik mangler; ingen kurve kan vises."
+                    if pid not in available
+                    else None,
+                )
                 code_col.text(
                     f"{item.current_code} → {item.upcoming_code}",
                     width="stretch",
@@ -618,30 +630,26 @@ def _group_comparison(
     with controls.popover("Gruppedetaljer", help=f"{len(group)} fundne varer i rapporten"):
         st.caption(
             "Gruppefuldstændighed er ikke verificeret. "
-            "Gruppen gælder den aktuelle rapport, ikke tidligere perioder."
+            "Gruppen gælder den aktuelle rapport, ikke tidligere perioder. "
+            "AIP er pr. pakning, ikke enhedspris. Kontrollér styrke og pakning."
         )
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Vare": _label(analysis, item.product_id),
-                        "Rolle": "Valgt kandidat"
-                        if item.product_id == product_id
-                        else "Alternativ",
-                        "Koder": f"{item.current_code} → {item.upcoming_code}",
-                        "Kostpris (DKK)": item.current_cost_ore / 100,
-                        "Opbevaring": item.storage_code,
-                        "H/K-fravalgt": "Ja" if item.storage_code in ("H", "K") else "Nej",
-                        "Historik": "Fundet"
-                        if item.product_id in analysis.history.prices
-                        else "Mangler",
-                    }
-                    for item in group
-                ]
-            ).style.format(precision=2, decimal=",", thousands=".", subset=["Kostpris (DKK)"]),
-            hide_index=True,
-            width="stretch",
-        )
+        for item in group:
+            pid = item.product_id
+            role = "Valgt kandidat" if pid == product_id else "Alternativ"
+            with st.container(border=True, key=f"group_detail_{pid}", gap="xxsmall"):
+                st.markdown(f"**{pid} · {role}**")
+                # Source descriptions wrap as plain text; never widen a comparison table.
+                st.text(analysis.history.labels.get(pid, "Navn ikke oplyst"))
+                st.text(f"Firma: {companies.get(pid, 'Ikke oplyst')}")
+                st.text(
+                    f"Cito-kostpris: {_money(item.current_cost_ore)} kr. · "
+                    f"Prisklasse: {item.current_code} → {item.upcoming_code}"
+                )
+                storage = item.storage_code or "Ikke oplyst"
+                if item.storage_code in ("H", "K"):
+                    storage += " · Fravalgt af indkøbsfilteret"
+                st.text(f"Opbevaring: {storage}")
+                st.text("Historik: " + ("Fundet" if pid in analysis.history.prices else "Mangler"))
     return tuple(selected)
 
 
@@ -732,7 +740,7 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
     if review.inspected_id not in ids:
         review.inspected_id = analysis.ranked_ids[0] if analysis.ranked_ids else ids[0]
     product_id = review.inspected_id
-    with st.container(border=True, key="price_workspace", height="stretch", gap=2):
+    with st.container(border=True, key="price_workspace", height="stretch", gap=None):
         index = visible.index(product_id) if product_id in visible else -1
         with st.container(horizontal=True, vertical_alignment="center", gap="xsmall"):
             st.subheader("2. Sammenlign priser", anchor="priser", width="content")
@@ -814,23 +822,21 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
             st.caption(
                 "Historisk prisniveau kan ikke sammenlignes: aktuel AIP eller historik mangler."
             )
-        view = st.radio(
-            "Vis prishistorik",
-            ["Hele historikken", "Seneste 26 perioder", "Seneste 52 perioder"],
-            horizontal=True,
-            key="chart_window",
-            label_visibility="collapsed",
-            help=(
-                "En prisperiode er 14 dage. Dette ændrer kun grafen, "
-                "ikke beregninger eller prioritering."
-            ),
-        )
         chart_area = st.container()
         comparison_area = st.container(gap=None)
         controls = st.container(horizontal=True, gap="xsmall")
         with comparison_area:
             overlays = _group_comparison(analysis, product_id, controls)
         with controls.popover("Flere grafvalg"):
+            view = st.radio(
+                "Vis prishistorik",
+                ["Hele historikken", "Seneste 26 perioder", "Seneste 52 perioder"],
+                key="chart_window",
+                help=(
+                    "En prisperiode er 14 dage. Dette ændrer kun grafen, "
+                    "ikke beregninger eller prioritering."
+                ),
+            )
             retrospective = st.checkbox(
                 "Vis også priser efter den valgte periode",
                 key="retrospective",
@@ -854,7 +860,6 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
                 key=f"history_{product_id}",
                 config={"displaylogo": False, "scrollZoom": False},
             )
-        st.caption("AIP pr. pakning · Kontrollér styrke og pakning · Ikke enhedspris")
 
 
 def _history_details(analysis: AnalysisResult, product_id: str) -> None:

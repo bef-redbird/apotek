@@ -20,6 +20,11 @@ sorted chronologically. Unknown metadata outside the date block is ignored;
 unknown or blank headings inside it are rejected. Recognized reference fields
 may occur between dates. Optional medicine, strength, form, pack and company
 labels are for display. Ambiguous headings and formula/error labels are ignored.
+The comparison's company field comes only from an unambiguous optional `Firma`
+column on exact AIP rows, not from interpreting a medicine description. Conflicting
+nonempty company values for the same product suppress that company field. Missing
+or unusable company information remains unspecified and does not change prices,
+eligibility, ranking or analysis identity.
 
 Required formulas need a values-only export; cached formula results are not
 accepted. Macro/encrypted files are rejected. Originals are never rewritten.
