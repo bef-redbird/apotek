@@ -80,8 +80,8 @@ def history_chart(
             annotation_position="top left",
         )
     figure.update_layout(
-        height=250,
-        margin={"l": 12, "r": 20, "t": 8, "b": 8},
+        height=260,
+        margin={"l": 12, "r": 20, "t": 8, "b": 4},
         xaxis_tickformat="%d-%m-%Y",
         separators=",.",
         yaxis_title="AIP pr. pakning (DKK)",

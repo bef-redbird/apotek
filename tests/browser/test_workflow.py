@@ -418,7 +418,7 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
                 e.closest('[data-testid="stMain"]').scrollBy(0, -80);
             }""")
             if section == "chart":
-                assert _visible_height(chart) >= 248
+                assert _visible_height(chart) >= 258
             page.screenshot(path=str(tmp_path / f"linked-{section}-{size}.png"))
     (tmp_path / "layout-metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     page.set_viewport_size({"width": 1366, "height": 768})
@@ -605,6 +605,8 @@ def test_group_checkbox_limit(browser: Browser, workspace_url: str, tmp_path: Pa
         expect(_alternative(page, "000007")).to_be_disabled()
         expect(_alternative(page, "000002")).to_be_enabled()
         page.wait_for_function("() => document.querySelector('.js-plotly-plot').data.length===6")
+        page.keyboard.press("Escape")
+        _linked_layout_evidence(page, tmp_path)
         _toggle_alternative(page, "000002", checked=False)
         _settled(page)
         expect(_alternative(page, "000007")).to_be_enabled()
@@ -614,8 +616,6 @@ def test_group_checkbox_limit(browser: Browser, workspace_url: str, tmp_path: Pa
             "() => {const ids=document.querySelector('.js-plotly-plot').data.map(t=>t.meta);"
             "return ids.length===6 && ids.includes('000007') && !ids.includes('000002')}"
         )
-        page.keyboard.press("Escape")
-        _linked_layout_evidence(page, tmp_path)
         page.screenshot(path=str(tmp_path / "five-alternatives-laptop.png"), full_page=True)
     finally:
         context.close()

@@ -732,7 +732,7 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
     if review.inspected_id not in ids:
         review.inspected_id = analysis.ranked_ids[0] if analysis.ranked_ids else ids[0]
     product_id = review.inspected_id
-    with st.container(border=True, key="price_workspace", height="stretch", gap="xxsmall"):
+    with st.container(border=True, key="price_workspace", height="stretch", gap=2):
         index = visible.index(product_id) if product_id in visible else -1
         with st.container(horizontal=True, vertical_alignment="center", gap="xsmall"):
             st.subheader("2. Sammenlign priser", anchor="priser", width="content")
@@ -826,7 +826,7 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
             ),
         )
         chart_area = st.container()
-        comparison_area = st.container(gap="xxsmall")
+        comparison_area = st.container(gap=None)
         controls = st.container(horizontal=True, gap="xsmall")
         with comparison_area:
             overlays = _group_comparison(analysis, product_id, controls)
