@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Deterministic Danish pharmaceutical procurement review workspace"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "streamlit>=1.50,<2",
+  "streamlit>=1.66,<2",
   "plotly>=6,<7",
   "openpyxl>=3.1.5,<4",
   "xlsxwriter>=3.2,<4",

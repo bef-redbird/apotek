@@ -107,6 +107,19 @@ def _expect_product(page: Page, product_id: str) -> None:
     ).to_be_visible()
 
 
+def _expect_table_product(page: Page, product_id: str | None) -> None:
+    """Read the native rendered accessibility rows; never assign browser selection."""
+    grid = page.locator(".st-key-candidate_list").get_by_test_id("stDataFrame")
+    selected = grid.locator('tbody tr[aria-selected="true"]')
+    if product_id is None:
+        expect(selected).to_have_count(0)
+        expect(grid.get_by_role("button", name="Clear selection", exact=True)).to_have_count(0)
+    else:
+        expect(selected).to_have_count(1)
+        expect(selected.locator('[aria-colindex="2"]')).to_have_text(product_id)
+        expect(grid.get_by_role("button", name="Clear selection", exact=True)).to_have_count(0)
+
+
 def _open_from_table(page: Page, product_id: str, *, query: str | None = None) -> None:
     """Filter and click the real native grid, then restore the user's search."""
     page.keyboard.press("Escape")
@@ -125,6 +138,7 @@ def _open_from_table(page: Page, product_id: str, *, query: str | None = None) -
     grid.click(position={"x": 16, "y": 56})
     _settled(page)
     _expect_product(page, product_id)
+    _expect_table_product(page, product_id)
     expect(page.get_by_role("button", name="Forrige kandidat", exact=True)).to_be_disabled()
     expect(page.get_by_role("button", name="Næste kandidat", exact=True)).to_be_disabled()
     search.fill(previous)
@@ -714,6 +728,88 @@ def test_descriptive_layout(browser: Browser, workspace_url: str, tmp_path: Path
         context.close()
 
 
+def test_native_candidate_selection_follows_main_only(
+    browser: Browser, workspace_url: str, tmp_path: Path
+) -> None:
+    context = browser.new_context(viewport={"width": 1366, "height": 768}, accept_downloads=True)
+    page = context.new_page()
+    page.set_default_timeout(10000)
+    try:
+        _load(page, workspace_url, tmp_path, count=6)
+        _expect_table_product(page, "000001")
+        page.get_by_role("button", name="Næste kandidat", exact=True).click()
+        _settled(page)
+        _expect_product(page, "000002")
+        _expect_table_product(page, "000002")
+        # Product 1 is in the table, but its graph checkbox only adds an overlay.
+        _toggle_alternative(page, "000001")
+        _expect_product(page, "000002")
+        _expect_table_product(page, "000002")
+        _review_alternative(page, "000001")
+        _expect_product(page, "000001")
+        _expect_table_product(page, "000001")
+        _show_review(page)
+        page.get_by_role("textbox", name="Note", exact=True).fill("Synkroniseret hovedvare")
+        page.get_by_role("button", name="Gem og næste kandidat", exact=True).click()
+        _settled(page)
+        _expect_product(page, "000002")
+        _expect_table_product(page, "000002")
+        page.get_by_role("button", name="Forrige kandidat", exact=True).click()
+        _settled(page)
+        _expect_product(page, "000001")
+        _expect_table_product(page, "000001")
+        _show_review(page, enabled=False)
+        search = page.get_by_role("textbox", name="Søg i kandidatlisten", exact=True)
+        search.fill("000003")
+        search.press("Enter")
+        _settled(page)
+        _expect_product(page, "000001")
+        _expect_table_product(page, None)
+        _toggle_alternative(page, "000003")
+        _expect_product(page, "000001")
+        _expect_table_product(page, None)
+        _open_from_table(page, "000003")
+        _expect_table_product(page, "000003")
+        search.fill("")
+        search.press("Enter")
+        _settled(page)
+        _expect_table_product(page, "000003")
+        page.get_by_text("Eksport og sessionskopi", exact=True).click()
+        saved = _download(page, "Hent sessionskopi (JSON)", tmp_path)
+        requested = page.get_by_role("spinbutton", name="Antal kandidater", exact=True)
+        requested.fill("2")
+        requested.press("Enter")
+        _settled(page)
+        _expect_product(page, "000003")
+        _expect_table_product(page, None)
+        grid = page.locator(".st-key-candidate_list").get_by_test_id("stDataFrame")
+        expect(grid.locator('tbody [aria-colindex="2"]')).to_have_text(["000001", "000002"])
+        grid.evaluate("""e => {
+            e.scrollIntoView({block:'start'});
+            e.closest('[data-testid="stMain"]').scrollBy(0, -80);
+        }""")
+        # Choose the nonfirst row while entering required-selection mode.
+        grid.click(position={"x": 16, "y": 92})
+        _settled(page)
+        _expect_product(page, "000002")
+        _expect_table_product(page, "000002")
+        page.locator('input[type="file"]').nth(2).set_input_files(saved)
+        page.get_by_role("button", name="Gendan vurderinger", exact=True).click()
+        expect(page.get_by_text("Sessionskopien er gendannet", exact=False)).to_be_visible()
+        _settled(page)
+        _expect_product(page, "000003")
+        _expect_table_product(page, "000003")
+        page.locator(".st-key-candidate_list").screenshot(
+            path=str(tmp_path / "native-main-000003-selected.png")
+        )
+    except Exception:
+        page.screenshot(path=str(tmp_path / "selection-failure.png"), full_page=True)
+        (tmp_path / "selection-failure.html").write_text(page.content(), encoding="utf-8")
+        raise
+    finally:
+        context.close()
+
+
 def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Path) -> None:
     context = browser.new_context(viewport={"width": 1366, "height": 768}, accept_downloads=True)
     page = context.new_page()
@@ -968,11 +1064,11 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         assert box is not None
         grid.click(position={"x": 16, "y": 56})
         _expect_product(page, "000001")
-        expect(page.get_by_role("button", name="Clear selection", exact=True)).to_be_visible()
+        _expect_table_product(page, "000001")
         _settled(page)
         page.get_by_role("button", name="Næste kandidat", exact=True).click()
         _expect_product(page, "000002")
-        expect(page.get_by_role("button", name="Clear selection", exact=True)).to_have_count(0)
+        _expect_table_product(page, "000002")
         grid.click(position={"x": 16, "y": 56})
         _expect_product(page, "000001")
         _settled(page)
@@ -993,6 +1089,17 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         expect(grid.locator("th").first).to_have_text("↓ Prioritet")
         grid.click(position={"x": 16, "y": 56})
         _expect_product(page, "000080")
+        _expect_table_product(page, "000080")
+        page.get_by_role("button", name="Forrige kandidat", exact=True).click()
+        _settled(page)
+        _expect_product(page, "000079")
+        _expect_table_product(page, "000079")
+        expect(grid.locator("th").first).to_have_text("↓ Prioritet")
+        page.get_by_role("button", name="Næste kandidat", exact=True).click()
+        _settled(page)
+        _expect_product(page, "000080")
+        _expect_table_product(page, "000080")
+        expect(grid.locator("th").first).to_have_text("↓ Prioritet")
         expect(
             page.get_by_test_id("stText").filter(
                 has_text=re.compile(r"^000080 · Eksempelpakning 80$")
@@ -1008,6 +1115,7 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
         requested.press("Enter")
         expect(page.get_by_text("Viser 17 af 17 ønskede kandidater", exact=False)).to_be_visible()
         _expect_product(page, "000080")
+        _expect_table_product(page, None)
         expect(page.get_by_role("textbox", name="Note", exact=True)).to_have_value(
             "=Syntetisk gennemgang"
         )

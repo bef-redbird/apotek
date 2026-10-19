@@ -13,6 +13,7 @@ from tests.ui.test_workspace import (
     candidate_table,
     loaded_app,
     select_table_product,
+    selected_table_ids,
     synthetic_analysis,
 )
 
@@ -162,6 +163,69 @@ def test_navigation_uses_visible_sequence_without_changing_queue() -> None:
     assert not app.exception
 
 
+def test_table_checkmark_follows_main_navigation_and_ignores_overlay_choices() -> None:
+    analysis = synthetic_analysis(4)
+    app = loaded_app(analysis)
+    aid = analysis.analysis_id
+    key = candidate_table(app).key
+    assert selected_table_ids(app) == ("000001",)
+    next(b for b in app.button if b.label == "Næste kandidat").click().run()
+    assert selected_table_ids(app) == ("000002",)
+    assert candidate_table(app).key == key
+    # Both alternatives are in the candidate table; neither owns its checkmark.
+    for pid in ("000001", "000003"):
+        app.checkbox(key=f"overlay_{aid}_000002_{pid}").check().run()
+        assert selected_table_ids(app) == ("000002",)
+        assert app.session_state["review"].inspected_id == "000002"
+    app.checkbox(key=f"overlay_{aid}_000002_000001").uncheck().run()
+    assert selected_table_ids(app) == ("000002",)
+    assert app.session_state["review"].selected_ids == set()
+    assert app.session_state["review"].reviews == {}
+    next(b for b in app.button if b.label == "Forrige kandidat").click().run()
+    assert selected_table_ids(app) == ("000001",)
+    select_table_product(app, "000002")
+    app.text_area(key=f"review_note_{aid}_000002").input("Bevar kandidatens vurdering").run()
+    next(b for b in app.button if b.label == "Gem og næste kandidat").click().run()
+    assert selected_table_ids(app) == ("000003",)
+    assert app.session_state["review"].reviews["000002"].note == "Bevar kandidatens vurdering"
+    app.checkbox(key=f"overlay_{aid}_000003_000004").check().run()
+    assert selected_table_ids(app) == ("000003",)
+    app.button(key="open_alternative_000003_000004").click().run()
+    assert selected_table_ids(app) == ("000004",)
+    assert candidate_table(app).key == key
+    assert app.session_state["analysis"].ranked_ids == analysis.ranked_ids
+    assert not app.exception
+
+
+def test_table_checkmark_tracks_identity_when_candidate_leaves_and_returns_to_scope() -> None:
+    app = loaded_app(synthetic_analysis(5))
+    aid = "synthetic-analysis"
+    select_table_product(app, "000003")
+    assert selected_table_ids(app) == ("000003",)
+    app.text_input(key="search").input("000002").run()
+    assert tuple(candidate_table(app).value["Varenr."]) == ("000002",)
+    assert selected_table_ids(app) == ()
+    assert app.session_state["review"].inspected_id == "000003"
+    app.text_input(key="search").input("").run()
+    assert selected_table_ids(app) == ("000003",)
+    app.number_input(key=f"queue_n_{aid}").set_value(2).run()
+    assert selected_table_ids(app) == ()
+    assert app.session_state["review"].inspected_id == "000003"
+    # Entering required-selection mode must not auto-check the first visible row.
+    select_table_product(app, "000002")
+    assert app.session_state["review"].inspected_id == "000002"
+    assert selected_table_ids(app) == ("000002",)
+    app.number_input(key=f"queue_n_{aid}").set_value(5).run()
+    select_table_product(app, "000003")
+    assert selected_table_ids(app) == ("000003",)
+    # Clearing a native highlight does not silently change the active candidate.
+    select_table_product(app, None)
+    assert selected_table_ids(app) == ("000003",)
+    assert app.session_state["review"].inspected_id == "000003"
+    assert app.session_state["review"].selected_ids == set()
+    assert not app.exception
+
+
 def test_native_selection_maps_combined_group_and_saved_status_filters() -> None:
     analysis = synthetic_analysis(4)
     item = replace(analysis.snapshot.items["000003"], group_id="002")
@@ -181,11 +245,14 @@ def test_native_selection_maps_combined_group_and_saved_status_filters() -> None
     status_table_key = candidate_table(app).key
     select_table_product(app, "000003")
     assert app.session_state["review"].inspected_id == "000003"
+    assert selected_table_ids(app) == ("000003",)
     app.selectbox(key="group").select("001").run()
     assert candidate_table(app).key != status_table_key
     assert tuple(candidate_table(app).value["Varenr."]) == ("000002",)
     assert app.session_state["review"].inspected_id == "000003"
+    assert selected_table_ids(app) == ()
     select_table_product(app, "000002")
+    assert selected_table_ids(app) == ("000002",)
     assert app.text_area(key=f"review_note_{aid}_000002").value == "Note 000002"
     assert app.session_state["review"].reviews["000003"].note == "Note 000003"
     assert app.session_state["analysis"].ranked_ids == tuple(analysis.candidates)
@@ -216,6 +283,7 @@ def test_all_group_members_are_comparable_without_changing_review_owner() -> Non
     assert app.text_area(key=f"review_note_{aid}_900004").value == ""
     assert "900004" not in tuple(candidate_table(app).value["Varenr."])
     assert app.session_state["review"].inspected_id == "900004"
+    assert selected_table_ids(app) == ()
     select_table_product(app, "000001")
     assert app.text_area(key=f"review_note_{aid}_000001").value == "Bevar beslutningsgrundlaget"
     assert app.session_state["review"].reviews == {

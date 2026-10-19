@@ -69,11 +69,9 @@ def _label(analysis: AnalysisResult, product_id: str) -> str:
 
 
 def _open_product(analysis_id: str, product_id: str) -> None:
-    st.session_state["review"].inspected_id = product_id
-    key = f"table_generation_{analysis_id}"
-    # Native table selections cannot be assigned programmatically. Remount only
-    # on external navigation so an old row never appears to own the new review.
-    st.session_state[key] = st.session_state.get(key, 0) + 1
+    review = st.session_state.get("review")
+    if isinstance(review, ReviewState) and review.analysis_id == analysis_id:
+        review.inspected_id = product_id
 
 
 def _toggle_alternative(analysis_id: str, product_id: str, alternative_id: str) -> None:
@@ -434,14 +432,17 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
                 "Kostpris (DKK)": candidate.item.current_cost_ore / 100,
             }
         )
-    rendered = json.dumps(
-        [mode, ids, st.session_state.get(f"table_generation_{analysis.analysis_id}", 0)],
-        ensure_ascii=False,
-    ).encode()
+    rendered = json.dumps([mode, ids], ensure_ascii=False).encode()
     generation = hashlib.sha256(rendered).hexdigest()[:16]
     key = f"table_{analysis.analysis_id}_{generation}"
     frame = pd.DataFrame(rows)
     frame["Prioritet"] = frame["Prioritet"].astype("Int64")
+    inspected = review.inspected_id
+    selected_rows = [ids.index(inspected)] if inspected is not None and inspected in ids else []
+    # Native selection follows the main candidate, never the comparison overlays.
+    # Keep the table mounted so next/previous navigation preserves its visible sort.
+    if st.session_state.get(key, {}).get("selection", {}).get("rows", []) != selected_rows:
+        st.session_state[key] = {"selection": {"rows": selected_rows}}
     # The callback captures exactly the IDs supplied to this rendered dataframe.
     st.dataframe(
         frame.style.format(
@@ -455,7 +456,10 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
         width="stretch",
         height=420,
         row_height=36,
-        selection_mode="single-row",
+        # A visible main candidate stays checked, even if its row is clicked again.
+        # Outside the filtered list, allow an empty selection instead of checking another item.
+        selection_mode="single-row-required" if selected_rows else "single-row",
+        selection_default={"selection": {"rows": selected_rows}},
         on_select=partial(_inspect_table, key, ids, analysis.analysis_id),
         key=key,
         column_config={
