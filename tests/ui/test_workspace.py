@@ -2,11 +2,13 @@
 
 from dataclasses import replace
 from datetime import date, timedelta
+from functools import partial
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from streamlit.testing.v1 import AppTest
-from streamlit.testing.v1.element_tree import Selectbox
+from streamlit.testing.v1.element_tree import Dataframe
 
 from bef_redbird.charts import history_chart
 from bef_redbird.domain import (
@@ -23,13 +25,34 @@ from bef_redbird.domain import (
     ReviewState,
     SourceInfo,
 )
-from bef_redbird.ui import _percentage_input
+from bef_redbird.ui import _inspect_table, _percentage_input
 
 APP = Path(__file__).resolve().parents[2] / "app.py"
 
 
-def candidate_picker(app: AppTest) -> Selectbox:
-    return next(widget for widget in app.selectbox if widget.label == "Kandidat i den viste liste")
+def candidate_table(app: AppTest) -> Dataframe:
+    return next(frame for frame in app.dataframe if "Vare" in frame.value.columns)
+
+
+def select_table_product(app: AppTest, product_id: str) -> AppTest:
+    """Exercise the registered native-table callback against its rendered row map.
+
+    AppTest's Dataframe currently has no selection API. Bind its session only while
+    invoking the actual registered callback; Chromium tests cover browser events,
+    including client-side sorting. Never assign the inspected product directly.
+    """
+    frame = candidate_table(app)
+    metadata = app._session_state._state._new_widget_state.widget_metadata[frame.proto.id]
+    callback = metadata.callback
+    assert isinstance(callback, partial) and callback.func is _inspect_table
+    key, ids, analysis_id = callback.args
+    assert key == frame.key
+    assert ids == tuple(frame.value["Varenr."])
+    assert analysis_id == app.session_state["analysis"].analysis_id
+    app.session_state[key] = {"selection": {"rows": [ids.index(product_id)]}}
+    with patch("bef_redbird.ui.st.session_state", app.session_state):
+        callback()
+    return app.run()
 
 
 def synthetic_analysis(count: int = 120, *, rankable: bool = True) -> AnalysisResult:
@@ -118,7 +141,7 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     app.number_input(key=f"queue_n_{aid}").set_value(80).run()
     assert not app.exception
     assert any("Viser 80 af 80" in item.value for item in app.caption)
-    candidate_picker(app).select("000080").run()
+    select_table_product(app, "000080")
     app.text_area(key=f"review_note_{aid}_000080").input("Bevar min note")
     app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
     app.checkbox(key=f"review_selected_{aid}_000080").check()
@@ -135,9 +158,9 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     assert any("Alle 120 prioriterbare" in item.value for item in app.caption)
     app.selectbox(key=f"queue_mode_{aid}").select("Alle kandidater").run()
     assert app.session_state["review"].queue.mode == "all_rankable"
-    candidate_picker(app).select("000001").run()
+    select_table_product(app, "000001")
     assert app.text_area(key=f"review_note_{aid}_000001").value == ""
-    candidate_picker(app).select("000080").run()
+    select_table_product(app, "000080")
     assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar min note"
     assert app.selectbox(key=f"review_status_{aid}_000080").value == "Interessant"
     assert not app.exception
@@ -196,7 +219,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     app.number_input(key=f"queue_n_{aid}").set_value(80).run()
     if queue.mode == "all_rankable":
         app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
-    candidate_picker(app).select("000080").run()
+    select_table_product(app, "000080")
     app.text_area(key=f"review_note_{aid}_000080").input("Gammel periodes note")
     app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
     app.checkbox(key=f"review_selected_{aid}_000080").check()
@@ -205,7 +228,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
         app.number_input(key=f"queue_n_{aid}").set_value(queue.top_n).run()
     app.button(key="prepare_excel").click().run()
     assert "prepared_export" in app.session_state
-    old_picker_key = candidate_picker(app).key
+    old_table_key = candidate_table(app).key
 
     def replacement(
         snapshot: CitoSnapshot,
@@ -242,7 +265,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     for key in (
         f"queue_n_{aid}",
         f"queue_mode_{aid}",
-        old_picker_key,
+        old_table_key,
         f"review_note_{aid}_000080",
         f"review_status_{aid}_000080",
         f"review_selected_{aid}_000080",
@@ -286,7 +309,7 @@ def test_failed_replacement_preserves_queue_and_analysis_bound_state(
     assert app.session_state["prepared_export"] == prepared
     assert app.number_input(key=f"queue_n_{aid}").value == 80
     assert app.selectbox(key=f"queue_mode_{aid}").value == "Alle prioriterbare"
-    assert candidate_picker(app).value == "000080"
+    assert app.session_state["review"].inspected_id == "000080"
     assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar alt"
     assert any("Syntetisk afvist" in item.value for item in app.error)
     assert not app.exception

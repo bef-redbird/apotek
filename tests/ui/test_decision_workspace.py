@@ -9,7 +9,12 @@ from bef_redbird.charts import history_chart
 from bef_redbird.domain import Review
 from bef_redbird.service import build_analysis
 from tests.fixtures import load_analysis
-from tests.ui.test_workspace import candidate_picker, loaded_app, synthetic_analysis
+from tests.ui.test_workspace import (
+    candidate_table,
+    loaded_app,
+    select_table_product,
+    synthetic_analysis,
+)
 
 
 def test_comparison_is_the_default_and_assessment_is_opt_in() -> None:
@@ -17,6 +22,8 @@ def test_comparison_is_the_default_and_assessment_is_opt_in() -> None:
     app = loaded_app(analysis, show_review=False)
     aid = analysis.analysis_id
     assert not app.toggle(key="show_review").value
+    assert not any(widget.label == "Kandidat i den viste liste" for widget in app.selectbox)
+    assert not any(item.label == "Vælg fra listen med tastatur" for item in app.expander)
     assert not app.text_area
     assert not any("Gem" in button.label for button in app.button)
     app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
@@ -114,7 +121,7 @@ def test_queue_is_compact_and_searches_display_metadata() -> None:
     assert list(queue.columns) == ["Prioritet", "Varenr.", "Vare", "Kostpris (DKK)"]
     assert len(queue) == 1
     assert queue.iloc[0]["Varenr."] == "000002"
-    assert "Firma B" in candidate_picker(app).options[0]
+    assert "Firma B" in queue.iloc[0]["Vare"]
     assert app.session_state["review"].queue.top_n == 50
     assert app.session_state["analysis"].analysis_id == analysis.analysis_id
     assert not app.exception
@@ -145,13 +152,43 @@ def test_navigation_uses_visible_sequence_without_changing_queue() -> None:
     app = loaded_app(synthetic_analysis(3))
     app.text_input(key="search").input("000002").run()
     assert next(b for b in app.button if b.label == "Næste kandidat").disabled
-    candidate_picker(app).select("000002").run()
+    select_table_product(app, "000002")
     assert next(b for b in app.button if b.label == "Forrige kandidat").disabled
     assert next(b for b in app.button if b.label == "Gem og næste kandidat").disabled
     assert app.session_state["analysis"].ranked_ids == ("000001", "000002", "000003")
     app.text_input(key="search").input("").run()
     next(b for b in app.button if b.label == "Næste kandidat").click().run()
     assert app.session_state["review"].inspected_id == "000003"
+    assert not app.exception
+
+
+def test_native_selection_maps_combined_group_and_saved_status_filters() -> None:
+    analysis = synthetic_analysis(4)
+    item = replace(analysis.snapshot.items["000003"], group_id="002")
+    analysis.snapshot.items["000003"] = item
+    analysis.candidates["000003"] = replace(analysis.candidates["000003"], item=item)
+    app = loaded_app(analysis)
+    aid = analysis.analysis_id
+    for pid in ("000002", "000003"):
+        select_table_product(app, pid)
+        app.selectbox(key=f"review_status_{aid}_{pid}").select("Interessant")
+        app.text_area(key=f"review_note_{aid}_{pid}").input(f"Note {pid}")
+        next(b for b in app.button if b.label == "Gem vurdering").click().run()
+    next(s for s in app.selectbox if s.label == "Vis kun denne vurdering").select(
+        "Interessant"
+    ).run()
+    assert tuple(candidate_table(app).value["Varenr."]) == ("000002", "000003")
+    status_table_key = candidate_table(app).key
+    select_table_product(app, "000003")
+    assert app.session_state["review"].inspected_id == "000003"
+    app.selectbox(key="group").select("001").run()
+    assert candidate_table(app).key != status_table_key
+    assert tuple(candidate_table(app).value["Varenr."]) == ("000002",)
+    assert app.session_state["review"].inspected_id == "000003"
+    select_table_product(app, "000002")
+    assert app.text_area(key=f"review_note_{aid}_000002").value == "Note 000002"
+    assert app.session_state["review"].reviews["000003"].note == "Note 000003"
+    assert app.session_state["analysis"].ranked_ids == tuple(analysis.candidates)
     assert not app.exception
 
 
@@ -177,8 +214,9 @@ def test_all_group_members_are_comparable_without_changing_review_owner() -> Non
     # Missing-history candidates can still be explicitly opened for review.
     app.button(key="open_alternative_000002_900004").click().run()
     assert app.text_area(key=f"review_note_{aid}_900004").value == ""
-    assert candidate_picker(app).value is None
-    candidate_picker(app).select("000001").run()
+    assert "900004" not in tuple(candidate_table(app).value["Varenr."])
+    assert app.session_state["review"].inspected_id == "900004"
+    select_table_product(app, "000001")
     assert app.text_area(key=f"review_note_{aid}_000001").value == "Bevar beslutningsgrundlaget"
     assert app.session_state["review"].reviews == {
         "000001": Review("Ikke vurderet", "Bevar beslutningsgrundlaget")
@@ -192,15 +230,55 @@ def test_empty_name_fallback_and_chart_identity_are_safe() -> None:
     analysis.history.labels = {"000002": "<b>Same name</b> · 20 mg"}
     analysis.history.companies = {"000002": "<b>Firma</b>"}
     app = loaded_app(analysis)
-    assert "Navn ikke oplyst" in candidate_picker(app).options[0]
+    assert candidate_table(app).value.iloc[0]["Vare"] == "Navn ikke oplyst"
     chart = history_chart(analysis, "000001", ("000002",))
     assert [trace.meta for trace in chart.data] == ["000001", "000002"]
     assert chart.data[0].name == "000001"
     assert "&lt;b&gt;" in chart.data[1].name
-    assert "&lt;b&gt;Same name&lt;/b&gt; · 20 mg" in chart.data[1].hovertemplate
+    assert "&lt;b&gt;Firma&lt;/b&gt;" in chart.data[1].hovertemplate
+    assert "000002" in chart.data[1].hovertemplate
+    assert "<b>Firma</b>" not in chart.data[1].hovertemplate
+    assert "<b>Same name</b>" not in chart.data[1].hovertemplate
     assert chart.data[0].line.dash != chart.data[1].line.dash
     assert chart.data[0].marker.symbol != chart.data[1].marker.symbol
     assert list(chart.data[1].y) == [100, 120, None, 100]
+
+
+def test_six_overlapping_series_keep_distinct_styles_and_exact_source_evidence() -> None:
+    analysis = synthetic_analysis(6)
+    ids = tuple(analysis.candidates)
+    # Equal prices must remain equal: visual separation cannot change source data.
+    prices = (10001, 12029, None, 10001)
+    analysis.history.prices = dict.fromkeys(ids, prices)
+    analysis.history.labels = dict.fromkeys(ids, '<b>Samme navn</b> & "pakning"')
+    analysis.history.companies = dict.fromkeys(ids, '<b>Firma</b> & "A"')
+    analysis.history.companies[ids[-1]] = "Langt firmanavn med ekstra tekst"
+    chart = history_chart(analysis, ids[0], ids[1:])
+    assert len(chart.data) == 6
+    assert [trace.meta for trace in chart.data] == list(ids)
+    assert len({trace.line.color for trace in chart.data}) == 6
+    assert len({trace.line.dash for trace in chart.data}) == 6
+    assert len({trace.marker.symbol for trace in chart.data}) == 6
+    # A single hover shows the identities of coincident series at that period.
+    assert chart.layout.hovermode == "x unified"
+    assert chart.layout.xaxis.unifiedhovertitle.text == "Periode %{x|%d-%m-%Y} · LMS"
+    assert chart.layout.showlegend
+    for pid, trace in zip(ids, chart.data, strict=True):
+        assert pid in trace.name and pid in trace.hovertemplate
+        expected_company = (
+            "Langt firmanavn med e…"
+            if pid == ids[-1]
+            else "&lt;b&gt;Firma&lt;/b&gt; &amp; &quot;A&quot;"
+        )
+        assert expected_company in trace.hovertemplate
+        assert "<b>Firma</b>" not in trace.hovertemplate
+        assert "<b>Samme navn</b>" not in trace.hovertemplate
+        assert "%{y:.2f}" in trace.hovertemplate
+        assert list(trace.x) == list(analysis.history.periods)
+        assert list(trace.y) == [100.01, 120.29, None, 100.01]
+        assert trace.connectgaps is False
+        assert trace.line.shape == "hv"
+    assert analysis.history.prices == dict.fromkeys(ids, prices)
 
 
 def test_unsaved_only_replacement_requires_acknowledgement() -> None:
@@ -256,8 +334,8 @@ def test_live_session_without_new_metadata_keeps_comparison_and_draft() -> None:
     note_key = f"review_note_{aid}_000001"
     app.text_area(key=note_key).input("Bevar min åbne kladde").run()
     app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
-    candidate_picker(app).select("000002").run()
-    candidate_picker(app).select("000001").run()
+    select_table_product(app, "000002")
+    select_table_product(app, "000001")
     assert app.text_area(key=note_key).value == "Bevar min åbne kladde"
     assert app.checkbox(key=f"overlay_{aid}_000001_000002").value
     assert any(t.value == "Firma ikke oplyst" for t in app.text)
@@ -276,10 +354,10 @@ def test_comparison_choices_survive_product_switches() -> None:
     aid = "synthetic-analysis"
     app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
     app.checkbox(key=f"overlay_{aid}_000001_000003").check().run()
-    candidate_picker(app).select("000002").run()
+    select_table_product(app, "000002")
     assert not app.checkbox(key=f"overlay_{aid}_000002_000001").value
     assert not app.checkbox(key=f"overlay_{aid}_000002_000003").value
-    candidate_picker(app).select("000001").run()
+    select_table_product(app, "000001")
     assert app.checkbox(key=f"overlay_{aid}_000001_000002").value
     assert app.checkbox(key=f"overlay_{aid}_000001_000003").value
     app.checkbox(key=f"overlay_{aid}_000001_000002").uncheck().run()
@@ -363,20 +441,20 @@ def test_direct_graph_controls_preserve_the_active_review() -> None:
     assert not app.exception
 
 
-def test_keyboard_candidate_fallback_contains_only_visible_table_rows() -> None:
+def test_native_table_selection_uses_only_visible_rows_and_preserves_outside_owner() -> None:
     app = loaded_app(synthetic_analysis(3))
     app.text_area(key="review_note_synthetic-analysis_000001").input("Bevar uden for listen").run()
     app.text_input(key="search").input("no match").run()
     assert not any(widget.label == "Kandidat i den viste liste" for widget in app.selectbox)
+    assert not any(item.label == "Vælg fra listen med tastatur" for item in app.expander)
+    assert not any("Vare" in frame.value.columns for frame in app.dataframe)
     app.text_input(key="search").input("000002").run()
-    picker = candidate_picker(app)
-    assert picker.options == ["000002 · Syntetisk vare 000002"]
-    assert picker.value is None
+    assert tuple(candidate_table(app).value["Varenr."]) == ("000002",)
     assert app.session_state["review"].inspected_id == "000001"
-    picker.select("000002").run()
+    select_table_product(app, "000002")
     assert app.session_state["review"].inspected_id == "000002"
     app.text_input(key="search").input("").run()
-    candidate_picker(app).select("000001").run()
+    select_table_product(app, "000001")
     assert (
         app.text_area(key="review_note_synthetic-analysis_000001").value == "Bevar uden for listen"
     )
@@ -386,7 +464,7 @@ def test_keyboard_candidate_fallback_contains_only_visible_table_rows() -> None:
 def test_prepared_export_survives_inspection_but_not_saved_review_change() -> None:
     app = loaded_app(synthetic_analysis(3))
     app.button(key="prepare_excel").click().run()
-    candidate_picker(app).select("000002").run()
+    select_table_product(app, "000002")
     assert any(item.label == "Hent Excel" for item in app.get("download_button"))
     app.text_area(key="review_note_synthetic-analysis_000002").input("Nyt grundlag").run()
     next(b for b in app.button if b.label == "Gem vurdering").click().run()

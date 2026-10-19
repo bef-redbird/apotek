@@ -33,8 +33,7 @@ No hosted instance or access-control verification is implied by these commands.
 3. Type any positive **Antal kandidater** (initially 50), or choose **Alle
    prioriterbare**. This slices the existing full ranking and preserves reviews.
    Search filters the chosen scope; it does not promote products into the queue.
-4. Select a row in the left candidate table. The right chart follows that candidate;
-   **Vælg fra listen med tastatur** provides a keyboard fallback for the same visible rows. Optional
+4. Select a row in the left candidate table. The right chart follows that candidate. Optional
    medicine, strength, form, pack and company labels distinguish products.
    **Forrige kandidat / Næste kandidat** follow the filtered list in canonical order; table sorting
    changes only the table. **Sammenlign priser** shows the selected period's LMS AIP as
@@ -61,12 +60,13 @@ No hosted instance or access-control verification is implied by these commands.
    the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
 The workspace shows the candidate list on the left and price comparison on the right,
-with matching panel heights. The table is taller and grows further for larger groups;
-the chart gets more room when there are fewer alternatives. The optional assessment appears below
-both panels only when **Vis vurdering** is enabled. The compact comparison is
-designed for a laptop viewport when scrolled to the workspace; larger groups, warnings
-and expanded keyboard controls need more space. The two panels stack on narrow screens;
-previous/next navigation stays with the selected medicine. Every found alternative is
+with matching panel borders. The table stays 420 pixels tall and the chart stays
+360 pixels tall, including its legend. Larger groups extend downward below the chart;
+adding alternatives or curves does not shrink its plotting area. The optional assessment appears
+below both panels only when **Vis vurdering** is enabled. Chart controls and the plot fit
+a laptop viewport when scrolled to the workspace; larger groups and warnings need more space.
+The two panels stack on narrow screens; outlined previous/next buttons stay with the
+selected medicine. Every found alternative is
 shown directly, with product number, LMS company, package AIP and current/upcoming
 classes aligned in each row.
 Shared medicine names and dosage descriptions stay in help and **Gruppedetaljer**;
@@ -74,7 +74,10 @@ the latter uses wrapping product cards rather than a wide table. Missing prices 
 H/K storage markers remain on the rows; missing-history controls explain why no curve
 can be shown. The heading gives the actual number of found alternatives and how many
 are selected; the five-curve limit is explained separately. Chart legends use product
-number and company. Period-range options and **Senere priser** are directly visible
+number and company. Contrasting colours, distinct line patterns and marker shapes
+identify up to six curves. Hovering a period shows all selected products' observed
+prices together, including coincident prices, without shifting any values or dates.
+Period-range options and **Senere priser** are directly visible
 above the chart, alongside **Gruppedetaljer**; **Filtre** holds group/review filters.
 Import and export controls stay in disclosures.
 Per-product comparison choices survive product changes; a prepared Excel download
