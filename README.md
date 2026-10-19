@@ -36,7 +36,10 @@ No hosted instance or access-control verification is implied by these commands.
 4. Select a row in the left candidate table. The right chart follows that candidate. Optional
    medicine, strength, form, pack and company labels distinguish products.
    **Forrige kandidat / Næste kandidat** follow the filtered list in canonical order; table sorting
-   changes only the table. **Sammenlign priser** shows the selected period's LMS AIP as
+   changes only the table. Its checkmark follows the active candidate across navigation;
+   checking substitutes for the chart leaves that candidate checkmark unchanged. If filters
+   hide the active candidate, no visible row is checked until it reappears.
+   **Sammenlign priser** shows the selected period's LMS AIP as
    **Kostpris fra LMS**, the product's own historical median, and **Afstand til median**
    on the right (median minus that LMS price). Missing LMS prices stay missing;
    Cito/LMS mismatch warnings remain visible. Check alternatives below the chart to compare their

@@ -34,7 +34,13 @@ def candidate_table(app: AppTest) -> Dataframe:
     return next(frame for frame in app.dataframe if "Vare" in frame.value.columns)
 
 
-def select_table_product(app: AppTest, product_id: str) -> AppTest:
+def selected_table_ids(app: AppTest) -> tuple[str, ...]:
+    frame = candidate_table(app)
+    rows = app.session_state[frame.key]["selection"]["rows"]
+    return tuple(frame.value.iloc[row]["Varenr."] for row in rows)
+
+
+def select_table_product(app: AppTest, product_id: str | None) -> AppTest:
     """Exercise the registered native-table callback against its rendered row map.
 
     AppTest's Dataframe currently has no selection API. Bind its session only while
@@ -49,7 +55,8 @@ def select_table_product(app: AppTest, product_id: str) -> AppTest:
     assert key == frame.key
     assert ids == tuple(frame.value["Varenr."])
     assert analysis_id == app.session_state["analysis"].analysis_id
-    app.session_state[key] = {"selection": {"rows": [ids.index(product_id)]}}
+    rows = [] if product_id is None else [ids.index(product_id)]
+    app.session_state[key] = {"selection": {"rows": rows}}
     with patch("bef_redbird.ui.st.session_state", app.session_state):
         callback()
     return app.run()
@@ -435,6 +442,8 @@ def test_unexpected_failure_is_safe_and_preserves_workspace(
 def test_restored_review_synchronizes_existing_frontend_preferences(show_review: bool) -> None:
     app = loaded_app(show_review=show_review)
     aid = "synthetic-analysis"
+    select_table_product(app, "000002")
+    assert selected_table_ids(app) == ("000002",)
     app.number_input(key=f"queue_n_{aid}").set_value(17).run()
     restored = ReviewState(aid)
     restored.queue = replace(restored.queue, top_n=80)
@@ -444,6 +453,7 @@ def test_restored_review_synchronizes_existing_frontend_preferences(show_review:
     app.session_state["sync_review_widgets"] = True
     app.run()
     assert app.number_input(key=f"queue_n_{aid}").value == 80
+    assert selected_table_ids(app) == ("000001",)
     assert app.toggle(key="show_review").value == show_review
     if not show_review:
         assert not app.text_area
