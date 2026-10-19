@@ -15,10 +15,13 @@ from tests.ui.test_workspace import candidate_picker, loaded_app, synthetic_anal
 @pytest.mark.parametrize(
     ("prices", "expected"),
     [
-        ((10001, 10000, 10001, 10000), ("100,00 kr.", "100,005 kr.", "0,005 kr.")),
-        ((9000, 10000, 10000, 11000), ("110,00 kr.", "100,000 kr.", "-10,000 kr.")),
-        ((10000, 10000, 10000, 10000), ("100,00 kr.", "100,000 kr.", "0,000 kr.")),
-        ((9000, 10000, 11000, None), ("Mangler kr.", "100,000 kr.", "Mangler kr.")),
+        ((10001, 10000, 10001, 10000), ("100,00 kr.", "100,01 kr.", "0,01 kr.")),
+        ((10000, 10001, 10000, 10001), ("100,01 kr.", "100,01 kr.", "-0,01 kr.")),
+        ((10029, 10000, 10029, 10000), ("100,00 kr.", "100,15 kr.", "0,15 kr.")),
+        ((10000, 10029, 10000, 10029), ("100,29 kr.", "100,15 kr.", "-0,15 kr.")),
+        ((9000, 10000, 10000, 11000), ("110,00 kr.", "100,00 kr.", "-10,00 kr.")),
+        ((10000, 10000, 10000, 10000), ("100,00 kr.", "100,00 kr.", "0,00 kr.")),
+        ((9000, 10000, 11000, None), ("Mangler kr.", "100,00 kr.", "Mangler kr.")),
         ((None, None, None, None), ("Mangler kr.", "Mangler kr.", "Mangler kr.")),
     ],
 )
@@ -33,6 +36,7 @@ def test_comparison_uses_selected_lms_price_and_signed_median_gap(
         prices={"000001": (*prices, 99999)},
     )
     analysis = build_analysis(source.snapshot, history, source.context, source.settings)
+    features = analysis.candidates["000001"].features
     app = loaded_app(analysis)
     assert [metric.label for metric in app.metric] == [
         "Kostpris fra LMS",
@@ -40,6 +44,10 @@ def test_comparison_uses_selected_lms_price_and_signed_median_gap(
         "Afstand til median",
     ]
     assert tuple(metric.value for metric in app.metric) == expected
+    assert app.session_state["analysis"].candidates["000001"].features == features
+    if prices in ((10001, 10000, 10001, 10000), (10000, 10001, 10000, 10001)):
+        assert features.median_ore == 10000.5
+        assert abs(features.median_distance_dkk) == 0.005
     if prices[-1] is not None:
         assert any("Cito-kostpris og periodens AIP" in warning.value for warning in app.warning)
     else:
@@ -110,15 +118,17 @@ def test_all_group_members_are_comparable_without_changing_review_owner() -> Non
     # Noncandidate H/K products are available in the same group checklist.
     app.checkbox(key=f"overlay_{aid}_000001_900001").check().run()
     assert app.session_state["review"].inspected_id == "000001"
-    assert any("Opbevaring H" in c.value for c in app.caption)
-    assert not any(b.label == "Vurder alternativ 900001" for b in app.button)
+    assert "Opb. H" in app.checkbox(key=f"overlay_{aid}_000001_900001").label
+    assert "Opbevaring H" in app.checkbox(key=f"overlay_{aid}_000001_900001").help
+    assert not any(b.key == "open_alternative_000001_900001" for b in app.button)
     assert app.checkbox(key=f"overlay_{aid}_000001_900002").disabled
-    assert any("Historik mangler; ingen kurve kan vises" in c.value for c in app.caption)
+    assert "Historik mangler" in app.checkbox(key=f"overlay_{aid}_000001_900002").label
+    assert "ingen kurve kan vises" in app.checkbox(key=f"overlay_{aid}_000001_900002").help
     app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
-    next(b for b in app.button if b.label == "Vurder alternativ 000002").click().run()
+    app.button(key="open_alternative_000001_000002").click().run()
     assert app.session_state["review"].inspected_id == "000002"
     # Missing-history candidates can still be explicitly opened for review.
-    next(b for b in app.button if b.label == "Vurder alternativ 900004").click().run()
+    app.button(key="open_alternative_000002_900004").click().run()
     assert app.text_area(key=f"review_note_{aid}_900004").value == ""
     assert candidate_picker(app).value is None
     candidate_picker(app).select("000001").run()
@@ -138,7 +148,7 @@ def test_empty_name_fallback_and_chart_identity_are_safe() -> None:
     chart = history_chart(analysis, "000001", ("000002",))
     assert [trace.meta for trace in chart.data] == ["000001", "000002"]
     assert "&lt;b&gt;" in chart.data[1].name
-    assert "20 mg" in chart.data[1].name
+    assert "&lt;b&gt;Same name&lt;/b&gt; · 20 mg" in chart.data[1].hovertemplate
     assert chart.data[0].line.dash != chart.data[1].line.dash
     assert chart.data[0].marker.symbol != chart.data[1].marker.symbol
     assert list(chart.data[1].y) == [100, 120, None, 100]
@@ -196,7 +206,11 @@ def test_alternatives_are_group_scoped_and_limit_is_explicit() -> None:
         app.checkbox(key=f"overlay_{aid}_000001_{pid}").check().run()
     assert app.checkbox(key=f"overlay_{aid}_000001_000007").disabled
     assert not app.checkbox(key=f"overlay_{aid}_000001_000006").disabled
-    assert any("Fem alternativer er valgt" in info.value for info in app.info)
+    assert any(
+        "5/5" in item.value and "Fem alternativer er valgt" in item.help
+        for item in app.markdown
+        if item.help
+    )
     app.checkbox(key=f"overlay_{aid}_000001_000003").uncheck().run()
     assert not app.checkbox(key=f"overlay_{aid}_000001_000007").disabled
     app.checkbox(key=f"overlay_{aid}_000001_000007").check().run()

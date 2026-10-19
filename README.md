@@ -42,7 +42,7 @@ No hosted instance or access-control verification is implied by these commands.
    on the right (median minus that LMS price). Missing LMS prices stay missing;
    Cito/LMS mismatch warnings remain visible. Check alternatives below the chart to compare their
    curves (up to five); uncheck to hide them. Only the selected candidate's found group
-   is offered. **Vurder alternativ [varenr.]** explicitly opens an eligible alternative.
+   is offered. **Vurder** on an alternative's row explicitly opens that eligible product.
    All found group members remain inspectable, including H/K and missing history.
    Current groups are not historical memberships or a verified complete market.
    Package AIP is not a unit-price or dispensing-price comparison.
@@ -59,14 +59,22 @@ No hosted instance or access-control verification is implied by these commands.
    the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
 The workspace shows the candidate list on the left and price comparison on the right,
-with an always-visible assessment below both. The two panels stack on narrow screens;
+with matching panel heights and an always-visible assessment below both. The compact
+comparison fits a laptop viewport when scrolled to the workspace; warnings and expanded
+keyboard controls may need more space. The two panels stack on narrow screens;
 previous/next navigation stays with the selected medicine. In-page links jump to
 prices, assessment and explanations. The chart's period range is a visible display
-control. One checklist selects group alternatives; a disclosure holds additional members
-of large groups. Members without history remain visible with their missing-data reason.
-Retrospective prices are in **Flere grafvalg**. Import and export controls stay in disclosures.
+control. Three compact alternative rows line up LMS package prices and current/upcoming
+classes. Extra members, group details and retrospective chart options open in popovers,
+so they do not push the comparison down the page. Full medicine labels, source cost and
+priority explanations are available through help; missing-history and H/K markers stay
+on the rows. **Filtre** holds group/review filters. Import and export controls stay in disclosures.
 Per-product comparison choices survive product changes; a prepared Excel download
 survives inspection changes but is invalidated when saved reviews or its scope change.
+
+Prices and monetary differences display two decimal places throughout the app and Excel.
+Half-øre medians and differences retain their precision in calculations and exported
+numeric cells; rounding is for display only (half-øre ties round away from zero).
 
 At the bottom, **Sådan læses analysen** documents how the sources relate, candidate
 selection, rankability checks, exact calculations and prioritization. It shows the

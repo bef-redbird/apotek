@@ -101,6 +101,28 @@ def test_clean_context_only_shows_supplied_transition(decision_analysis):
     assert book["Indkøbsoverblik"]["G4"].value == "A til C."
 
 
+def test_price_display_has_two_decimals_without_rounding_half_ore_values(decision_analysis):
+    book = _book(decision_analysis, ReviewState(decision_analysis.analysis_id), "all_eligible")
+    for sheet_name, first_row, columns in (
+        ("Indkøbsoverblik", 4, (3, 4, 5)),
+        ("Kandidater", 2, (4, 8, 13, 14)),
+        ("Gruppeoverblik", 2, (7,)),
+    ):
+        sheet = book[sheet_name]
+        for row in sheet.iter_rows(min_row=first_row):
+            for column in columns:
+                cell = row[column - 1]
+                if cell.value is not None:
+                    assert cell.data_type == "n"
+                    assert cell.number_format == "#,##0.00"
+
+    assert book["Indkøbsoverblik"]["E4"].value == 150.015
+    assert book["Kandidater"]["M2"].value == 150.015
+    assert book["Kandidater"]["N2"].value == 50.005
+    assert book["Kandidater"]["O2"].value == 0.25
+    assert book["Kandidater"]["O2"].number_format == "0.0%"
+
+
 @pytest.mark.parametrize("scope", ["queue", "selected", "all_eligible"])
 def test_scope_order_parity_detail_and_manifest_unchanged(decision_analysis, scope):
     state = ReviewState(

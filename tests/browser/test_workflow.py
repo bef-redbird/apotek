@@ -96,11 +96,11 @@ def _settled(page: Page) -> None:
     })""")
 
 
-def _keyboard_picker(page: Page) -> None:
+def _keyboard_picker(page: Page, *, expanded: bool = True) -> None:
     details = page.get_by_text("Vælg fra listen med tastatur", exact=True).locator(
         "xpath=ancestor::details[1]"
     )
-    if details.get_attribute("open") is None:
+    if (details.get_attribute("open") is not None) != expanded:
         details.locator("summary").click()
     # Native details animation continues after Streamlit reports render quiescence.
     # Opening the combobox during that animation can immediately dismiss its popover.
@@ -118,12 +118,20 @@ def _keyboard_picker(page: Page) -> None:
 
 
 def _alternative(page: Page, product_id: str) -> Locator:
+    page.keyboard.press("Escape")
     _settled(page)
     checkbox = page.get_by_role("checkbox", name=re.compile(rf"^{product_id} · "))
     if not checkbox.is_visible():
         page.get_by_text(re.compile(r"^Vis flere alternativer ")).click()
     checkbox.evaluate("e => e.scrollIntoView({block:'center', behavior:'instant'})")
     return checkbox
+
+
+def _review_alternative(page: Page, product_id: str) -> None:
+    checkbox = _alternative(page, product_id)
+    row = checkbox.locator("xpath=ancestor::*[contains(@class, 'st-key-alternative_')][1]")
+    row.get_by_role("button", name="Vurder", exact=True).click()
+    _settled(page)
 
 
 def _toggle_alternative(page: Page, product_id: str, *, checked: bool = True) -> None:
@@ -138,6 +146,7 @@ def _toggle_alternative(page: Page, product_id: str, *, checked: bool = True) ->
 
 
 def _select(page: Page, label: str, value: str) -> None:
+    page.keyboard.press("Escape")
     _settled(page)
     if label == "Kandidat i den viste liste":
         _keyboard_picker(page)
@@ -178,7 +187,10 @@ def _load(
     if large_group:
         workbook = load_workbook(BytesIO(cito))
         for row in workbook["Table"].iter_rows(min_row=2):
-            row[5].value = "1"
+            # Keep the deliberately conflicting fixture outside this group;
+            # one-screen measurements exercise a healthy comparison.
+            if row[0].value != "900005":
+                row[5].value = "1"
         output = BytesIO()
         workbook.save(output)
         cito = output.getvalue()
@@ -267,7 +279,9 @@ def _visible_height(locator: Locator) -> float:
 
 
 def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
+    page.keyboard.press("Escape")
     _settled(page)
+    _keyboard_picker(page, expanded=False)
     queue = page.locator(".st-key-candidate_list")
     prices = page.locator(".st-key-price_workspace")
     form = page.locator(".st-key-review_editor")
@@ -291,6 +305,7 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             const plot = document.querySelector('.js-plotly-plot');
             return plot && Math.abs(plot._fullLayout.width - plot.clientWidth) < 3;
         }""")
+        prices.screenshot(path=str(tmp_path / f"measured-prices-{size}.png"))
         sections = [section.bounding_box() for section in (queue, prices, form)]
         assert all(sections)
         candidate_box, price_box, review_box = sections
@@ -304,6 +319,8 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             assert middle["x"] + middle["width"] < last["x"]
             assert max(card["y"] for card in (first, middle, last)) - first["y"] <= 2
             assert abs(candidate_box["y"] - price_box["y"]) <= 2, sections
+            assert abs(candidate_box["height"] - price_box["height"]) <= 2, sections
+            assert max(candidate_box["height"], price_box["height"]) <= 700, sections
             assert candidate_box["x"] + candidate_box["width"] < price_box["x"], sections
             assert price_box["width"] > candidate_box["width"], sections
             assert candidate_box["width"] >= 450, sections
@@ -320,15 +337,20 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
         assert abs(review_box["x"] - candidate_box["x"]) <= 2, sections
         grid_box = grid.bounding_box()
         assert grid_box is not None and grid_box["width"] >= candidate_box["width"] - 40
-        assert grid_box["height"] >= 590, "Candidate rows must have a readable table viewport"
+        assert 318 <= grid_box["height"] <= 322, grid_box
         dimensions = chart.locator(".js-plotly-plot").evaluate("""plot => ({
             width: plot._fullLayout._size.w,
             height: plot._fullLayout._size.h,
             font: plot._fullLayout.font.size,
         })""")
-        assert dimensions["height"] >= 320, dimensions
+        assert dimensions["height"] >= 160, dimensions
         assert dimensions["width"] >= (500 if width > 600 else 300), dimensions
         assert dimensions["font"] >= 12, dimensions
+        if width > 600:
+            trace_count = chart.locator(".js-plotly-plot").evaluate("plot => plot.data.length")
+            legend_labels = chart.locator(".legendtext")
+            expect(legend_labels).to_have_count(trace_count if trace_count > 1 else 0)
+            expect(chart.locator(".legend .scrollbar")).to_be_hidden()
         method_box = page.get_by_role(
             "heading", name="Sådan læses analysen", exact=True
         ).bounding_box()
@@ -365,6 +387,25 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
             "plot": dimensions,
             "grid_scroll": grid_scroll,
         }
+        if width > 600:
+            queue.evaluate("""e => {
+                e.scrollIntoView({block:'start'});
+                e.closest('[data-testid="stMain"]').scrollBy(0, -64);
+            }""")
+            expect(queue).to_be_in_viewport(ratio=1)
+            expect(prices).to_be_in_viewport(ratio=1)
+            expect(chart).to_be_in_viewport(ratio=1)
+            for label in chart.locator(".legendtext").all():
+                expect(label).to_be_in_viewport(ratio=1)
+            rows = prices.locator('[class*="st-key-alternative_"]')
+            expect(rows).to_have_count(3)
+            for row in rows.all():
+                expect(row).to_be_in_viewport(ratio=1)
+            for label in ("Vis flere alternativer", "Gruppedetaljer", "Flere grafvalg"):
+                expect(
+                    prices.get_by_role("button", name=re.compile(rf"^{label}"))
+                ).to_be_in_viewport(ratio=1)
+            page.screenshot(path=str(tmp_path / f"linked-whole-workspace-{size}.png"))
         for section, target in (
             ("controls", queue),
             ("table", grid),
@@ -377,7 +418,7 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> None:
                 e.closest('[data-testid="stMain"]').scrollBy(0, -80);
             }""")
             if section == "chart":
-                assert _visible_height(chart) >= 440
+                assert _visible_height(chart) >= 248
             page.screenshot(path=str(tmp_path / f"linked-{section}-{size}.png"))
     (tmp_path / "layout-metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     page.set_viewport_size({"width": 1366, "height": 768})
@@ -464,12 +505,16 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
             (".st-key-review_editor", "Til kandidatlisten", "kandidater"),
             (".st-key-candidate_list", "Se den valgte kandidats priser", "priser"),
             (".st-key-price_workspace", "Gem din vurdering", "vurdering"),
-            (".st-key-price_workspace", "Beregninger og metode", "metode"),
         ):
             page.locator(section).get_by_role("link", name=label, exact=True).click()
             expect(page).to_have_url(re.compile(rf"#{anchor}$"))
             expect(selector).to_have_value("000002 · Eksempelpakning 2")
             expect(note).to_have_value("Ugemt kladde til vare 2")
+        page.get_by_role("button", name="Flere grafvalg", exact=True).click()
+        page.get_by_role("link", name="Beregninger og metode", exact=True).click()
+        expect(page).to_have_url(re.compile(r"#metode$"))
+        expect(note).to_have_value("Ugemt kladde til vare 2")
+        page.keyboard.press("Escape")
         page.get_by_role("button", name="Næste kandidat", exact=True).click()
         expect(selector).to_have_value("000003 · Eksempelpakning 3")
         _settled(page)
@@ -489,8 +534,8 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         # Comparison only toggles traces; the candidate and its draft retain ownership.
         _toggle_alternative(page, "900001")
         expect(selector).to_have_value("000002 · Eksempelpakning 2")
-        expect(page.get_by_text("Opbevaring H:", exact=False)).to_be_visible()
-        expect(page.get_by_role("button", name="Vurder alternativ 900001")).to_have_count(0)
+        expect(_alternative(page, "900001")).to_have_accessible_name(re.compile(r"Opb\. H"))
+        expect(page.locator(".st-key-open_alternative_000002_900001")).to_have_count(0)
         page.wait_for_function(
             "() => {const p=document.querySelector('.js-plotly-plot');"
             "return p && p.data.length===2 && p.data[0].meta==='000002' "
@@ -501,13 +546,12 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         page.wait_for_function("() => document.querySelector('.js-plotly-plot').data.length===1")
         _toggle_alternative(page, "900001")
         expect(_alternative(page, "900002")).to_be_disabled()
-        expect(
-            page.get_by_text("Historik mangler; ingen kurve kan vises.", exact=False).first
-        ).to_be_visible()
+        expect(_alternative(page, "900002")).to_have_accessible_name(
+            re.compile(r"Historik mangler")
+        )
         expect(selector).to_have_value("000002 · Eksempelpakning 2")
-        expect(page.get_by_role("button", name="Vurder alternativ 900002")).to_have_count(0)
-        page.get_by_role("button", name="Vurder alternativ 900004", exact=True).click()
-        _settled(page)
+        expect(page.locator(".st-key-open_alternative_000002_900002")).to_have_count(0)
+        _review_alternative(page, "900004")
         expect(selector).to_have_value("")
         expect(
             page.get_by_test_id("stText").filter(has_text=re.compile(r"^900004 · "))
@@ -521,13 +565,12 @@ def test_decision_navigation(browser: Browser, workspace_url: str, tmp_path: Pat
         expect(_alternative(page, "900001")).to_be_checked()
         _toggle_alternative(page, "000001")
         page.locator(".st-key-price_workspace").get_by_text(
-            "Sammenlign med substitutionsalternativer", exact=True
+            "Substitutionsalternativer", exact=False
         ).evaluate("""e => {
             e.scrollIntoView({block:'center'});
         }""")
         page.screenshot(path=str(tmp_path / "two-selected-alternatives-laptop.png"))
-        page.get_by_role("button", name="Vurder alternativ 000001", exact=True).click()
-        _settled(page)
+        _review_alternative(page, "000001")
         expect(selector).to_have_value("000001 · Eksempelpakning 1")
         expect(note).to_have_value("")
         expect(_alternative(page, "900001")).not_to_be_checked()
@@ -552,10 +595,9 @@ def test_group_checkbox_limit(browser: Browser, workspace_url: str, tmp_path: Pa
     page.set_default_timeout(10000)
     try:
         _load(page, workspace_url, tmp_path, count=9, large_group=True)
-        panel = page.locator(".st-key-price_workspace")
         # Exactly one control per alternative, including disabled missing-history rows.
         expect(_alternative(page, "900002")).to_be_disabled()
-        expect(panel.get_by_role("checkbox", name=re.compile(r"^\d{6} · "))).to_have_count(12)
+        expect(page.get_by_role("checkbox", name=re.compile(r"^\d{6} · "))).to_have_count(12)
         expect(_alternative(page, "000009")).to_be_enabled()
         for pid in ("000002", "000003", "000004", "000005", "000006"):
             _toggle_alternative(page, pid)
@@ -572,6 +614,8 @@ def test_group_checkbox_limit(browser: Browser, workspace_url: str, tmp_path: Pa
             "() => {const ids=document.querySelector('.js-plotly-plot').data.map(t=>t.meta);"
             "return ids.length===6 && ids.includes('000007') && !ids.includes('000002')}"
         )
+        page.keyboard.press("Escape")
+        _linked_layout_evidence(page, tmp_path)
         page.screenshot(path=str(tmp_path / "five-alternatives-laptop.png"), full_page=True)
     finally:
         context.close()
@@ -583,6 +627,14 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
     page.set_default_timeout(10000)
     try:
         _load(page, workspace_url, tmp_path)
+        page.get_by_role("button", name="Filtre", exact=True).click()
+        expect(
+            page.get_by_role("combobox", name="Vis kun denne substitutionsgruppe", exact=True)
+        ).to_be_visible()
+        expect(
+            page.get_by_role("combobox", name="Vis kun denne vurdering", exact=True)
+        ).to_be_visible()
+        page.keyboard.press("Escape")
         requested = page.get_by_role("spinbutton", name="Antal kandidater", exact=True)
         requested.fill("80")
         requested.press("Enter")
@@ -691,14 +743,12 @@ def test_real_workflow(browser: Browser, workspace_url: str, tmp_path: Path) -> 
             "return p && p.data.length===2 && p.data[0].x.length===26 "
             "&& p.data[1].meta==='900001'}"
         )
-        page.get_by_text("Gruppedetaljer · 7 fundne varer", exact=True).click()
+        page.get_by_role("button", name="Gruppedetaljer", exact=True).click()
         expect(
             page.get_by_text("Gruppefuldstændighed er ikke verificeret", exact=False).last
         ).to_be_visible()
-        expect(
-            page.locator(".st-key-price_workspace").get_by_test_id("stDataFrame").first
-        ).to_be_visible()
-        page.get_by_text("Gruppedetaljer · 7 fundne varer", exact=True).click()
+        expect(page.get_by_test_id("stPopoverBody").get_by_test_id("stDataFrame")).to_be_visible()
+        page.keyboard.press("Escape")
         _select(page, "Hvilke kandidater vil du se?", "Prioriteret liste")
         requested.fill("80")
         requested.press("Enter")

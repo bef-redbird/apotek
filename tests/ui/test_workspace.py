@@ -373,7 +373,9 @@ def test_screening_precision_and_limited_denominator() -> None:
     )
     analysis.snapshot.incomplete_groups.add("001")
     app = loaded_app(analysis)
-    assert any("0,005 DKK" in item.value for item in app.text)
+    assert any("0,01 DKK" in item.value for item in app.text)
+    assert app.session_state["analysis"].candidates["000001"].features.median_ore == 10000.5
+    assert app.session_state["analysis"].candidates["000001"].features.median_distance_dkk == 0.005
     assert any("Begrænset grundlag" in item.value for item in app.text)
     assert any("uafklarede rækker i gruppen" in item.value for item in app.warning)
     assert not app.exception

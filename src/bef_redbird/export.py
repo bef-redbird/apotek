@@ -151,6 +151,7 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
     body = book.add_format(base)
     wrapped = book.add_format({**base, "text_wrap": True})
     decimal = book.add_format({**base, "num_format": "#,##0.00####"})
+    price = book.add_format({**base, "num_format": "#,##0.00"})
     percent = book.add_format({**base, "num_format": "0.0%"})
     judgment = book.add_format({**base, "text_wrap": True, "bg_color": "#FFF8E8"})
     context = book.add_format({**base, "font_color": "#52616B"})
@@ -163,6 +164,7 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
         widths: list[int] | None = None,
         wrap_columns: tuple[int, ...] = (),
         percent_columns: tuple[int, ...] = (),
+        price_columns: tuple[int, ...] = (),
         judgment_columns: tuple[int, ...] = (),
         start_row: int = 0,
         freeze_columns: int = 2,
@@ -191,6 +193,8 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
                         value,
                         percent
                         if col in percent_columns
+                        else price
+                        if col in price_columns
                         else decimal
                         if isinstance(value, float)
                         else body,
@@ -269,6 +273,7 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
         widths=[11, 26, 12, 12, 16, 18, 27],
         wrap_columns=(1,),
         judgment_columns=(5, 6),
+        price_columns=(2, 3, 4),
         start_row=2,
         freeze_columns=2,
     )
@@ -400,6 +405,7 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
         wrap_columns=(23, 24, 26),
         judgment_columns=(25,),
         percent_columns=(10, 11, 14, 17, 21, 22),
+        price_columns=(3, 7, 12, 13),
     )
     selected_set = set(ids)
     selected_groups = {analysis.snapshot.items[pid].group_id for pid in ids} - {None}
@@ -444,6 +450,7 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
         groups,
         widths=[13, 14, 45, 21, 18, 18, 18, 18, 18, 16, 38, 26],
         wrap_columns=(2, 10, 11),
+        price_columns=(6,),
         freeze_columns=3,
     )
     manifest = analysis.manifest()
