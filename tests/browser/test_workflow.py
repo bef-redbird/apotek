@@ -508,7 +508,13 @@ def _linked_layout_evidence(page: Page, tmp_path: Path) -> dict[str, Any]:
                     e.closest('[data-testid="stMain"]').scrollBy(0, -80);
                 }""")
                 expect(row).to_be_in_viewport(ratio=1)
-                expect(row.get_by_role("checkbox")).to_be_in_viewport(ratio=1)
+                checkbox = row.get_by_role("checkbox")
+                product_id = checkbox.get_attribute("aria-label")
+                assert product_id is not None and re.fullmatch(r"\d{6}", product_id)
+                expect(checkbox).to_have_accessible_name(product_id)
+                label = checkbox.locator("xpath=ancestor::label[1]")
+                expect(label).to_be_in_viewport(ratio=1)
+                expect(label.get_by_text(product_id, exact=True)).to_be_in_viewport(ratio=1)
                 page.screenshot(path=str(tmp_path / f"linked-alternatives-narrow-{position}.png"))
         for section, target in (
             ("controls", queue),
