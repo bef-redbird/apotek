@@ -488,7 +488,6 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
             args=(analysis.analysis_id, selector),
             help="Samme kandidater som i tabellen, efter søgning og filtre.",
         )
-    st.markdown("[Se den valgte kandidats priser](#priser)")
     return ids
 
 
@@ -516,7 +515,7 @@ def _issues(analysis: AnalysisResult) -> None:
 
 
 def _group_comparison(
-    analysis: AnalysisResult, product_id: str, controls: DeltaGenerator
+    analysis: AnalysisResult, product_id: str, details_control: DeltaGenerator
 ) -> tuple[str, ...]:
     group = analysis.group_members(product_id)
     # A live session loaded before company metadata was added may lack this field.
@@ -537,13 +536,13 @@ def _group_comparison(
 
     names, prices, codes, _ = st.columns([4.9, 1.35, 1.4, 1.15], gap="xsmall")
     names.markdown(
-        f"**Substitutionsalternativer** · {len(selected)}/5",
+        f"**Substitutionsalternativer: {len(alternatives)}** · {len(selected)} valgt",
         help=(
-            "Fundne alternativer i rapporten · "
+            f"Alle {len(alternatives)} fundne alternativer i den indlæste Cito-rapport · "
             f"Gruppe {analysis.candidates[product_id].item.group_id or 'ikke oplyst'}. "
             "Alle fundne alternativer vises med varenummer, firma, AIP og prisklasse. "
             "Firma er som angivet i LMS. Sæt flueben for at vise en kurve. "
-            "Fjern det for at skjule kurven. "
+            "Fjern det for at skjule kurven. Højst fem alternativkurver kan vises samtidig. "
             "Kun den aktuelle rapports gruppe; fuldstændighed er ikke verificeret."
             + (
                 " Fem alternativer er valgt. Fjern et flueben for at vælge et andet."
@@ -627,7 +626,7 @@ def _group_comparison(
                         args=(analysis.analysis_id, pid),
                         help=f"Vurder alternativ {pid}. Dine vurderinger bevares.",
                     )
-    with controls.popover("Gruppedetaljer", help=f"{len(group)} fundne varer i rapporten"):
+    with details_control.popover("Gruppedetaljer", help=f"{len(group)} fundne varer i rapporten"):
         st.caption(
             "Gruppefuldstændighed er ikke verificeret. "
             "Gruppen gælder den aktuelle rapport, ikke tidligere perioder. "
@@ -728,7 +727,6 @@ def _review_editor(
             on_click=_save_review,
             args=(analysis.analysis_id, product_id, next_id),
         )
-        st.markdown("[Se den valgte kandidats priser](#priser) · [Til kandidatlisten](#kandidater)")
     if st.session_state.pop("saved_review", None):
         st.success("Vurderingen er gemt i denne midlertidige session.")
 
@@ -822,32 +820,36 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
             st.caption(
                 "Historisk prisniveau kan ikke sammenlignes: aktuel AIP eller historik mangler."
             )
+        range_control, later_control, details_control = st.columns(
+            [3.6, 1.75, 1.65], gap="xsmall", vertical_alignment="center"
+        )
+        view = range_control.radio(
+            "Vis prishistorik",
+            ["Hele historikken", "Seneste 26 perioder", "Seneste 52 perioder"],
+            format_func=lambda value: {
+                "Hele historikken": "Alle",
+                "Seneste 26 perioder": "26 perioder",
+                "Seneste 52 perioder": "52 perioder",
+            }[value],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="chart_window",
+            help=(
+                "En prisperiode er 14 dage. Dette ændrer kun grafen, "
+                "ikke beregninger eller prioritering."
+            ),
+        )
+        retrospective = later_control.checkbox(
+            "Senere priser",
+            key="retrospective",
+            help=(
+                "Vis også priser efter den valgte periode. Retrospektiv visning: "
+                "senere observationer markeres i grafen og indgår aldrig i prioriteringen."
+            ),
+        )
         chart_area = st.container()
-        comparison_area = st.container(gap=None)
-        controls = st.container(horizontal=True, gap="xsmall")
-        with comparison_area:
-            overlays = _group_comparison(analysis, product_id, controls)
-        with controls.popover("Flere grafvalg"):
-            view = st.radio(
-                "Vis prishistorik",
-                ["Hele historikken", "Seneste 26 perioder", "Seneste 52 perioder"],
-                key="chart_window",
-                help=(
-                    "En prisperiode er 14 dage. Dette ændrer kun grafen, "
-                    "ikke beregninger eller prioritering."
-                ),
-            )
-            retrospective = st.checkbox(
-                "Vis også priser efter den valgte periode",
-                key="retrospective",
-                help=(
-                    "Retrospektiv visning. Senere priser kan ikke bruges "
-                    "som viden på beslutningstidspunktet."
-                ),
-            )
-            st.caption("Senere observationer markeres i grafen og indgår aldrig i prioriteringen.")
-            st.markdown("[Beregninger og metode](#metode)")
-        controls.markdown("[Gem din vurdering](#vurdering)", width="content")
+        with st.container(gap=None):
+            overlays = _group_comparison(analysis, product_id, details_control)
         limit = {"Hele historikken": None, "Seneste 26 perioder": 26, "Seneste 52 perioder": 52}[
             view
         ]
