@@ -12,6 +12,52 @@ from tests.fixtures import load_analysis
 from tests.ui.test_workspace import candidate_picker, loaded_app, synthetic_analysis
 
 
+def test_comparison_is_the_default_and_assessment_is_opt_in() -> None:
+    analysis = synthetic_analysis(3)
+    app = loaded_app(analysis, show_review=False)
+    aid = analysis.analysis_id
+    assert not app.toggle(key="show_review").value
+    assert not app.text_area
+    assert not any("Gem" in button.label for button in app.button)
+    app.checkbox(key=f"overlay_{aid}_000001_000002").check().run()
+    app.button(key="open_alternative_000001_000002").click().run()
+    assert app.session_state["review"].inspected_id == "000002"
+    assert not app.text_area
+    assert app.session_state["review"].reviews == {}
+    app.toggle(key="show_review").set_value(True).run()
+    assert app.text_area(key=f"review_note_{aid}_000002").value == ""
+    assert app.session_state["analysis"].analysis_id == aid
+    assert not app.exception
+
+
+def test_hiding_assessment_preserves_saved_reviews_and_unsaved_drafts() -> None:
+    app = loaded_app(synthetic_analysis(3))
+    aid = "synthetic-analysis"
+    app.text_area(key=f"review_note_{aid}_000001").input("Gemt vurdering").run()
+    app.checkbox(key=f"review_selected_{aid}_000001").check().run()
+    next(b for b in app.button if b.label == "Gem og næste kandidat").click().run()
+    app.text_area(key=f"review_note_{aid}_000002").input("Ugemt vurdering").run()
+    app.selectbox(key=f"review_status_{aid}_000002").select("Undersøg nærmere").run()
+    app.checkbox(key=f"review_selected_{aid}_000002").check().run()
+    app.checkbox(key=f"overlay_{aid}_000002_000003").check().run()
+    app.toggle(key="show_review").set_value(False).run()
+    assert not app.text_area
+    app.radio(key="chart_window").set_value("Seneste 26 perioder").run()
+    next(b for b in app.button if b.label == "Forrige kandidat").click().run()
+    app.toggle(key="show_review").set_value(True).run()
+    assert app.text_area(key=f"review_note_{aid}_000001").value == "Gemt vurdering"
+    next(b for b in app.button if b.label == "Næste kandidat").click().run()
+    assert app.text_area(key=f"review_note_{aid}_000002").value == "Ugemt vurdering"
+    assert app.selectbox(key=f"review_status_{aid}_000002").value == "Undersøg nærmere"
+    assert app.checkbox(key=f"review_selected_{aid}_000002").value
+    assert app.checkbox(key=f"overlay_{aid}_000002_000003").value
+    review = app.session_state["review"]
+    assert review.reviews == {"000001": Review("Ikke vurderet", "Gemt vurdering")}
+    assert review.selected_ids == {"000001"}
+    assert app.session_state["analysis"].analysis_id == aid
+    assert not app.exception
+
+
 @pytest.mark.parametrize(
     ("prices", "expected"),
     [

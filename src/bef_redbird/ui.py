@@ -448,6 +448,9 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
     key = f"table_{analysis.analysis_id}_{generation}"
     frame = pd.DataFrame(rows)
     frame["Prioritet"] = frame["Prioritet"].astype("Int64")
+    alternative_count = len(analysis.group_members(review.inspected_id or ids[0])) - 1
+    # A useful native table height also survives the stacked narrow-screen layout.
+    table_height = min(600, 380 + 32 * max(0, alternative_count - 6))
     # The callback captures exactly the IDs supplied to this rendered dataframe.
     st.dataframe(
         frame.style.format(
@@ -459,7 +462,7 @@ def _queue(analysis: AnalysisResult, review: ReviewState) -> tuple[str, ...]:
         ),
         hide_index=True,
         width="stretch",
-        height=320,
+        height=table_height,
         row_height=36,
         selection_mode="single-row",
         on_select=partial(_inspect_table, key, ids, analysis.analysis_id),
@@ -619,12 +622,12 @@ def _group_comparison(
                 )
                 if pid in analysis.candidates and (pid in selected or pid not in available):
                     action_col.button(
-                        "Vurder",
+                        "Vis",
                         key=f"open_alternative_{product_id}_{pid}",
                         type="tertiary",
                         on_click=_open_product,
                         args=(analysis.analysis_id, pid),
-                        help=f"Vurder alternativ {pid}. Dine vurderinger bevares.",
+                        help=f"Vis priser for alternativ {pid}.",
                     )
     with details_control.popover("Gruppedetaljer", help=f"{len(group)} fundne varer i rapporten"):
         st.caption(
@@ -847,18 +850,26 @@ def _detail(analysis: AnalysisResult, review: ReviewState, visible: tuple[str, .
                 "senere observationer markeres i grafen og indgår aldrig i prioriteringen."
             ),
         )
-        chart_area = st.container()
+        chart_area = st.container(height="stretch")
         with st.container(gap=None):
             overlays = _group_comparison(analysis, product_id, details_control)
         limit = {"Hele historikken": None, "Seneste 26 perioder": 26, "Seneste 52 perioder": 52}[
             view
         ]
         with chart_area:
+            # Use spare room for the graph in small groups without pushing a
+            # six-alternative comparison below an ordinary laptop viewport.
+            alternative_count = sum(
+                item.product_id != product_id for item in analysis.group_members(product_id)
+            )
+            figure = history_chart(
+                analysis, product_id, overlays, retrospective=retrospective, view_periods=limit
+            )
+            figure.update_layout(height=max(260, 440 - 36 * alternative_count))
             st.plotly_chart(
-                history_chart(
-                    analysis, product_id, overlays, retrospective=retrospective, view_periods=limit
-                ),
+                figure,
                 width="stretch",
+                height="stretch",
                 key=f"history_{product_id}",
                 config={"displaylogo": False, "scrollZoom": False},
             )
@@ -945,7 +956,7 @@ def _exports(analysis: AnalysisResult, review: ReviewState) -> None:
     st.subheader("Eksportér din indkøbsgennemgang")
     if _unsaved(review):
         st.warning(
-            "Du har ugemte vurderinger. Gem dem under Gem din vurdering før eksport; "
+            "Du har ugemte vurderinger. Slå Vis vurdering til og gem før eksport; "
             "kun gemte vurderinger medtages."
         )
     st.caption(
@@ -1060,7 +1071,14 @@ def _workspace() -> None:
         )
         return
     review = _review(analysis)
-    _header(analysis)
+    summary, review_control = st.columns([5, 1], vertical_alignment="center")
+    with summary:
+        _header(analysis)
+    show_review = review_control.toggle(
+        "Vis vurdering",
+        key="show_review",
+        help="Vis status, note og eksportvalg under sammenligningen. Dine vurderinger bevares.",
+    )
     if analysis.candidates and review.inspected_id not in analysis.candidates:
         review.inspected_id = (
             analysis.ranked_ids[0] if analysis.ranked_ids else min(analysis.candidates)
@@ -1072,7 +1090,8 @@ def _workspace() -> None:
     with right:
         _detail(analysis, review, visible)
     if review.inspected_id in analysis.candidates:
-        _review_editor(analysis, review, review.inspected_id, visible)
+        if show_review:
+            _review_editor(analysis, review, review.inspected_id, visible)
         _history_details(analysis, review.inspected_id)
     with st.expander("Eksport og sessionskopi"):
         _exports(analysis, review)

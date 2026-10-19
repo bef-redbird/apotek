@@ -42,12 +42,14 @@ No hosted instance or access-control verification is implied by these commands.
    on the right (median minus that LMS price). Missing LMS prices stay missing;
    Cito/LMS mismatch warnings remain visible. Check alternatives below the chart to compare their
    curves (up to five); uncheck to hide them. Only the selected candidate's found group
-   is offered. **Vurder** on an alternative's row explicitly opens that eligible product.
+   is offered. **Vis** on an alternative's row explicitly opens that eligible product.
    All found group members remain inspectable, including H/K and missing history.
    Current groups are not historical memberships or a verified complete market.
    Package AIP is not a unit-price or dispensing-price comparison.
-5. Under **Gem din vurdering**, choose status, note and export inclusion. Drafts survive
-   product changes in this session. **Gem vurdering** commits them to exports;
+5. Optionally enable **Vis vurdering** above the workspace to open **Gem din vurdering**
+   and choose status, note and export inclusion. It is hidden by default so the workspace
+   focuses on candidates and prices. Hiding it preserves saved assessments and drafts.
+   Drafts survive product changes in this session. **Gem vurdering** commits them to exports;
    **Gem og næste kandidat** saves and opens the next visible candidate. Only saved reviews
    appear in downloads. Replacing the analysis requires acknowledging saved work
    or unsaved drafts; restoring a JSON copy deliberately replaces both.
@@ -59,7 +61,9 @@ No hosted instance or access-control verification is implied by these commands.
    the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
 The workspace shows the candidate list on the left and price comparison on the right,
-with matching panel heights and an assessment below both. The compact comparison is
+with matching panel heights. The table is taller and grows further for larger groups;
+the chart gets more room when there are fewer alternatives. The optional assessment appears below
+both panels only when **Vis vurdering** is enabled. The compact comparison is
 designed for a laptop viewport when scrolled to the workspace; larger groups, warnings
 and expanded keyboard controls need more space. The two panels stack on narrow screens;
 previous/next navigation stays with the selected medicine. Every found alternative is
