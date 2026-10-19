@@ -47,7 +47,7 @@ def history_chart(
             values.append(value / 100 if value is not None else None)
         label = analysis.history.labels.get(item_id, "Navn ikke oplyst")
         # IDs stay available as trace metadata; human labels are escaped for Plotly HTML.
-        short_label = label if len(label) <= 55 else label[:52] + "…"
+        short_label = label if len(label) <= 12 else label[:9] + "…"
         figure.add_trace(
             go.Scatter(
                 x=dates,
@@ -80,17 +80,17 @@ def history_chart(
             annotation_position="top left",
         )
     figure.update_layout(
-        height=520,
-        margin={"l": 12, "r": 20, "t": 16, "b": 12},
-        xaxis_title="Prisperiodens start",
+        height=260,
+        margin={"l": 12, "r": 20, "t": 8, "b": 4},
         xaxis_tickformat="%d-%m-%Y",
         separators=",.",
         yaxis_title="AIP pr. pakning (DKK)",
-        showlegend=True,
+        yaxis_tickformat=".2f",
+        showlegend=bool(overlays),
         legend={
             "orientation": "h",
-            "y": -0.22,
-            "yanchor": "top",
+            "y": 1,
+            "yanchor": "bottom",
             "x": 0,
             "font": {"size": 13},
             "maxheight": 0.2,
