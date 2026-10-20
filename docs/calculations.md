@@ -1,4 +1,10 @@
-# Inputs, calculations and review contracts
+# Implemented baseline: inputs, calculations and review contracts
+
+Scope: the current application only. [The approved direction](direction.md) and
+[data foundation](data-foundation.md) govern new development; [progress.md](progress.md)
+records implementation status. The rules below preserve the named baseline and
+its reproducibility. They are not permanent product policy or a restriction on
+new source adapters, persistence, candidate models or the final frontend.
 
 This reference describes the implemented temporary Streamlit review workspace.
 Historical priority is a deterministic screening rule for human review, without
