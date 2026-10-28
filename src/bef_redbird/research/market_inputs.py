@@ -10,6 +10,7 @@ import argparse
 from datetime import date
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 
@@ -132,11 +133,11 @@ def advance_checkpoint(previous_path: Path, snapshot_path: Path, output: Path) -
             "mode": "synthetic",
         },
     )
-    stage = output.with_name(output.name + ".stage")
+    stage = output.with_name(output.name + ".stage-" + uuid4().hex)
     stage.mkdir(parents=True, exist_ok=False)
     raw.to_parquet(stage / "raw.parquet", index=False)
     features.to_parquet(stage / "features.parquet", index=False)
-    pd.DataFrame(native).to_parquet(stage / "native.parquet", index=False)
+    e4_features.money_frame(native).to_parquet(stage / "native.parquet", index=False)
     artifacts = {}
     for name in ("raw", "features", "native"):
         reference = pin(stage / f"{name}.parquet")

@@ -42,6 +42,16 @@ def records(frame: pd.DataFrame) -> list[dict[str, Any]]:
     )
 
 
+def money_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    """Keep exact ore and missing values through pandas and Parquet round trips."""
+    frame = pd.DataFrame(rows)
+    for name in ("aip_ore", "lag1_delta_ore", "lag2_delta_ore", "lag3_delta_ore"):
+        if name in frame:
+            # Use original scalars before DataFrame inference can promote to float.
+            frame[name] = pd.array([row[name] for row in rows], dtype="Int64")
+    return frame
+
+
 def native(snapshot: Path, previous: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Decode same-edition native attributes; identity uses the accepted causal recipe."""
     saved = read(snapshot)
@@ -176,7 +186,7 @@ def native(snapshot: Path, previous: pd.DataFrame) -> tuple[pd.DataFrame, list[d
             quantity, state = e3_peers.scalar_quantity(member)
             member.update(quantity_token_value=quantity, quantity_state=state)
             members.append(member)
-    return pd.DataFrame(raw).sort_values("package_number").reset_index(drop=True), members
+    return money_frame(raw).sort_values("package_number").reset_index(drop=True), members
 
 
 def advance(
@@ -254,7 +264,7 @@ def advance(
                 "provenance": r["provenance"],
             }
         )
-    return pd.DataFrame(result)
+    return money_frame(result)
 
 
 def peers(
