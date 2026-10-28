@@ -291,7 +291,7 @@ def _outcome_chart(document: Any, rows: pd.DataFrame, period: str, mode: str) ->
         (horizontal(overlap_low), vertical(overlap_low)),
         (horizontal(overlap_high), vertical(overlap_high)),
         color=(0.48, 0.55, 0.54),
-        dashes="[4 3]",
+        dashes="[4 3] 0",
         width=1,
     )
     for key in observed.index:

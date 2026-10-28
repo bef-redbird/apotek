@@ -1,5 +1,6 @@
 """The portable report preserves the frozen queue and explicit missingness."""
 
+import re
 from pathlib import Path
 from unicodedata import normalize
 
@@ -70,6 +71,11 @@ def test_saved_pdf_uses_prediction_rank_and_omits_private_metadata(tmp_path: Pat
         assert "skøn minus udfald: 8,17 kr." in chart_text
         assert "999" not in chart_text
         assert len([item for item in document[0].get_drawings() if item["fill"]]) == 3
+        # PDF dash arrays require a numeric phase before `d`. MuPDF tolerates a
+        # missing phase, while Acrobat/Edge can omit that line and all later points.
+        commands = document[0].read_contents()
+        assert re.search(rb"\]\s+d\b", commands) is None
+        assert re.search(rb"\]\s+[-+]?\d+(?:\.\d+)?\s+d\b", commands)
         for page in document:
             # Full-size output must remain on page and render successfully.
             assert page.get_pixmap().width == page.rect.width

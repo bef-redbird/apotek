@@ -234,6 +234,11 @@ def candidates(
                 marker={"size": 7},
                 legendrank=0,
                 connectgaps=False,
+                hovertemplate=(
+                    f"<b>Valgt pakning {package}</b><br>"
+                    "Prisperiode: %{x|%d.%m.%Y}<br>Historisk AIP: %{y:,.2f} kr."
+                    "<extra></extra>"
+                ),
             )
         )
         chart.add_trace(
@@ -244,6 +249,12 @@ def candidates(
                 name="Forventet næste AIP",
                 line={"dash": "dot", "color": "#111111", "width": 3},
                 legendrank=1,
+                text=["Nuværende AIP", "Forventet næste AIP"],
+                hovertemplate=(
+                    f"<b>Valgt pakning {package}</b><br>"
+                    "Prisperiode: %{x|%d.%m.%Y}<br>%{text}: %{y:,.2f} kr."
+                    "<extra></extra>"
+                ),
             )
         )
         if row.outcome_status == "observed" and pd.notna(row.actual_next_dkk):
@@ -255,7 +266,11 @@ def candidates(
                     name="Faktisk AIP",
                     legendrank=2,
                     marker={"symbol": "triangle-up", "size": 14, "color": "#c45e2a"},
-                    hovertemplate="Faktisk AIP: %{y:.2f} kr.<extra></extra>",
+                    hovertemplate=(
+                        f"<b>Valgt pakning {package}</b><br>"
+                        "Prisperiode: %{x|%d.%m.%Y}<br>Faktisk næste AIP: %{y:,.2f} kr."
+                        "<extra></extra>"
+                    ),
                 )
             )
         selected_trace_count = len(chart.data)
@@ -287,6 +302,11 @@ def candidates(
                     legendgroup=number,
                     legendrank=10 + index,
                     line={"color": colour, "width": 1.5},
+                    hovertemplate=(
+                        f"<b>Substitutionspakning {number}</b><br>"
+                        "Prisperiode: %{x|%d.%m.%Y}<br>Faktisk AIP: %{y:,.2f} kr."
+                        "<extra></extra>"
+                    ),
                 )
             )
         # Plotly paints later traces above earlier ones; retain selected-first legend order.
@@ -297,6 +317,13 @@ def candidates(
             legend={"orientation": "h", "yanchor": "top", "y": -0.25, "x": 0},
             margin={"b": 120},
             height=520,
+            separators=",.",
+            hoverlabel={
+                "namelength": -1,
+                "bgcolor": "#ffffff",
+                "bordercolor": "#526766",
+                "font": {"color": "#111111", "size": 14},
+            },
         )
         st.plotly_chart(chart, width="stretch", key=f"history-{key}")
         st.caption(

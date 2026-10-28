@@ -46,6 +46,9 @@ triangles. Scatter bounds include negative outcomes and the requested margins.
 Navigation, notes and exports do not rerun inference. The final nine-page PDF uses
 landscape candidate tables and includes full assessment identities, model vintages,
 creation times and the absence of validated intervals for these forecasts.
+The final export was also checked in Edge's native PDF viewer: a malformed dash
+instruction that hid chart points in that reader is corrected and regression-tested.
+Package chart tooltips use explicit dates, price types and two-decimal DKK amounts.
 
 The actual historical Cito upload completed in 6.779 seconds, including 2.421 seconds
 validation, 1.039 current-only inference, 1.934 hybrid inference and 0.958 publication;
