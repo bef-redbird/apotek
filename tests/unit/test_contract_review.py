@@ -164,8 +164,8 @@ def test_large_group_export_preserves_every_relation_and_missing_groups_are_sepa
     assert {row[0] for row in group_rows} == expected_members
     missing_rows = {row[0]: row for row in group_rows if row[1] is None}
     assert set(missing_rows) == {"900001", "900002"}
-    assert missing_rows["900001"][2] == "Varenummer 900001"
-    assert missing_rows["900002"][2] == "Varenummer 900002"
+    assert missing_rows["900001"][11] == "Varenummer 900001"
+    assert missing_rows["900002"][11] == "Varenummer 900002"
 
     metadata = list(book["Metode og datakontrol"].values)[1:]
     relations = [json.loads(value) for key, value in metadata if key == "selected_group_relation"]

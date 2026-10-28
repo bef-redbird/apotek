@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 from dataclasses import asdict
 from typing import Any
 
@@ -135,20 +136,68 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
     book = xlsxwriter.Workbook(
         output, {"in_memory": True, "strings_to_formulas": False, "strings_to_urls": False}
     )
-    header = book.add_format({"bold": True, "bg_color": "#E6EEEB", "font_color": "#193A32"})
-    decimal = book.add_format({"num_format": "#,##0.00####"})
+    base = {"font_name": "Arial", "font_size": 10, "valign": "top"}
+    header = book.add_format(
+        {
+            **base,
+            "bold": True,
+            "bg_color": "#E9EDF0",
+            "font_color": "#243645",
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter",
+        }
+    )
+    body = book.add_format(base)
+    wrapped = book.add_format({**base, "text_wrap": True})
+    decimal = book.add_format({**base, "num_format": "#,##0.00####"})
+    price = book.add_format({**base, "num_format": "#,##0.00"})
+    percent = book.add_format({**base, "num_format": "0.0%"})
+    judgment = book.add_format({**base, "text_wrap": True, "bg_color": "#FFF8E8"})
+    context = book.add_format({**base, "font_color": "#52616B"})
 
-    def table(name: str, headers: list[str], rows: list[list[Any]]) -> None:
+    def table(
+        name: str,
+        headers: list[str],
+        rows: list[list[Any]],
+        *,
+        widths: list[int] | None = None,
+        wrap_columns: tuple[int, ...] = (),
+        percent_columns: tuple[int, ...] = (),
+        price_columns: tuple[int, ...] = (),
+        judgment_columns: tuple[int, ...] = (),
+        start_row: int = 0,
+        freeze_columns: int = 2,
+    ) -> Any:
         sheet = book.add_worksheet(name)
+        widths = widths or [18] * len(headers)
         for col, label in enumerate(headers):
-            sheet.write_string(0, col, label, header)
-        for rowno, row in enumerate(rows, 1):
+            sheet.write_string(start_row, col, label, header)
+            sheet.set_column(col, col, widths[col])
+        for rowno, row in enumerate(rows, start_row + 1):
+            lines = 1
             for col, value in enumerate(row):
+                cell_format = (
+                    judgment
+                    if col in judgment_columns
+                    else wrapped
+                    if col in wrap_columns
+                    else body
+                )
                 if value is None:
-                    sheet.write_blank(rowno, col, None)
+                    sheet.write_blank(rowno, col, None, cell_format)
                 elif isinstance(value, (int, float)) and not isinstance(value, bool):
                     sheet.write_number(
-                        rowno, col, value, decimal if isinstance(value, float) else None
+                        rowno,
+                        col,
+                        value,
+                        percent
+                        if col in percent_columns
+                        else price
+                        if col in price_columns
+                        else decimal
+                        if isinstance(value, float)
+                        else body,
                     )
                 else:
                     if len(str(value)) > 32767:
@@ -156,11 +205,96 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
                             "Et eksportfelt overskrider Excels tekstgrænse; "
                             "brug et mindre eksportområde."
                         )
-                    sheet.write_string(rowno, col, str(value))
-        sheet.freeze_panes(1, 0)
-        sheet.autofilter(0, 0, len(rows), len(headers) - 1)
-        sheet.set_column(0, len(headers) - 1, 18)
+                    sheet.write_string(rowno, col, str(value), cell_format)
+                    if col in (*wrap_columns, *judgment_columns):
+                        # Excel does not autofit wrapped rows written by XlsxWriter.
+                        # Allow for word boundaries as well as explicit line breaks.
+                        lines = max(
+                            lines,
+                            sum(
+                                max(1, math.ceil(len(line) / max(1, widths[col] - 4)))
+                                for line in str(value).split("\n")
+                            ),
+                        )
+            if lines > 1:
+                sheet.set_row(rowno, min(409, 15 * lines + 6))
+        sheet.freeze_panes(start_row + 1, freeze_columns)
+        sheet.autofilter(start_row, 0, start_row + len(rows), len(headers) - 1)
         sheet.set_default_row(19)
+        sheet.set_row(start_row, 48)
+        sheet.hide_gridlines(2)
+        sheet.set_landscape()
+        sheet.set_paper(9)  # A4; wide evidence sheets may span several pages horizontally.
+        sheet.repeat_rows(start_row, start_row)
+        sheet.repeat_columns(0, min(1, len(headers) - 1))
+        sheet.print_area(0, 0, start_row + len(rows), len(headers) - 1)
+        sheet.set_margins(0.3, 0.3, 0.4, 0.4)
+        sheet.set_footer("&L" + name + "&RSide &P af &N")
+        return sheet
+
+    overview: list[list[Any]] = []
+    for pid in ids:
+        item = analysis.snapshot.items[pid]
+        candidate = analysis.candidates.get(pid)
+        f = candidate.features if candidate else None
+        review = state.reviews.get(pid, Review())
+        clarification = f"{item.current_code} til {item.upcoming_code}."
+        if item.group_id is None:
+            clarification += "\nGruppe mangler; alternativer kan ikke samles."
+        if candidate is None:
+            clarification += "\nUden for kandidatfilteret."
+        elif candidate.flags:
+            clarification += "\n" + candidate.reason
+        if item.group_id in analysis.snapshot.incomplete_groups:
+            clarification += "\nUafklarede kilderækker i gruppen."
+        overview.append(
+            [
+                pid,
+                analysis.history.labels.get(pid) or f"Varenummer {pid}",
+                item.current_cost_ore / 100,
+                f.current_aip_ore / 100 if f and f.current_aip_ore is not None else None,
+                f.median_ore / 100 if f and f.median_ore is not None else None,
+                review.status,
+                (review.note + "\n\n" if review.note else "") + clarification,
+            ]
+        )
+    sheet = table(
+        "Indkøbsoverblik",
+        [
+            "Varenummer",
+            "Produkt / beskrivelse",
+            "Cito-kostpris (DKK)",
+            "Aktuel AIP (DKK)",
+            "Egen historisk AIP-median (DKK)",
+            "Vurdering",
+            "Note / afklaring",
+        ],
+        overview,
+        widths=[11, 26, 12, 12, 16, 18, 27],
+        wrap_columns=(1,),
+        judgment_columns=(5, 6),
+        price_columns=(2, 3, 4),
+        start_row=2,
+        freeze_columns=2,
+    )
+    sheet.set_tab_color("#243645")
+    sheet.write_string(0, 0, f"Aktuel periode: {analysis.context.current_period:%d-%m-%Y}", context)
+    periods = [p for p in analysis.history.periods if p <= analysis.context.current_period][
+        -analysis.settings.lookback_periods :
+    ]
+    window = (
+        f"Historik: {periods[0]:%d-%m-%Y} til {periods[-1]:%d-%m-%Y}, {len(periods)} perioder."
+        if periods
+        else "Ingen historikperioder frem til den aktuelle periode."
+    )
+    sheet.write_string(0, 2, window, context)
+    sheet.write_string(
+        1,
+        0,
+        "AIP pr. pakning. Historiske niveauer er ikke en besparelse. Alternativer: Gruppeoverblik.",
+        context,
+    )
+    sheet.set_row(1, 19)
 
     headers = [
         "Prioritet",
@@ -232,7 +366,47 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
                 ",".join(map(str, analysis.history.source_rows.get(pid, ()))),
             ]
         )
-    table("Kandidater", headers, rows)
+    detail_widths = [
+        11,
+        13,
+        18,
+        18,
+        18,
+        18,
+        14,
+        18,
+        14,
+        14,
+        14,
+        18,
+        18,
+        24,
+        15,
+        14,
+        17,
+        19,
+        21,
+        21,
+        18,
+        19,
+        20,
+        30,
+        55,
+        20,
+        45,
+        20,
+        20,
+    ]
+    table(
+        "Kandidater",
+        headers,
+        rows,
+        widths=detail_widths,
+        wrap_columns=(23, 24, 26),
+        judgment_columns=(25,),
+        percent_columns=(10, 11, 14, 17, 21, 22),
+        price_columns=(3, 7, 12, 13),
+    )
     selected_set = set(ids)
     selected_groups = {analysis.snapshot.items[pid].group_id for pid in ids} - {None}
     groups = []
@@ -243,7 +417,8 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
             [
                 pid,
                 member.group_id,
-                f"Gruppe {member.group_id}" if member.group_id is not None else f"Varenummer {pid}",
+                analysis.history.labels.get(pid) or f"Varenummer {pid}",
+                "Ja" if pid in selected_set else "Nej",
                 member.current_code,
                 member.upcoming_code,
                 member.current_cost_ore / 100,
@@ -253,6 +428,7 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
                 "Uafklarede rækker i gruppen"
                 if member.group_id in analysis.snapshot.incomplete_groups
                 else "Fuldstændighed ikke verificeret",
+                f"Gruppe {member.group_id}" if member.group_id is not None else f"Varenummer {pid}",
             ]
         )
     table(
@@ -260,7 +436,8 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
         [
             "Varenummer",
             "Gruppe",
-            "Forbindelse til Kandidater",
+            "Produkt / beskrivelse",
+            "Med i Indkøbsoverblik",
             "Nuværende kode",
             "Kommende kode",
             "Kostpris (DKK)",
@@ -268,8 +445,13 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
             "H/K-fravalgt",
             "Historik",
             "Gruppeforbehold",
+            "Forbindelse til Kandidater",
         ],
         groups,
+        widths=[13, 14, 45, 21, 18, 18, 18, 18, 18, 16, 38, 26],
+        wrap_columns=(2, 10, 11),
+        price_columns=(6,),
+        freeze_columns=3,
     )
     manifest = analysis.manifest()
     manifest["queue_export"] = {
@@ -306,7 +488,13 @@ def export_analysis(analysis: AnalysisResult, state: ReviewState, scope: str = "
             for issue in analysis.issues
         ]
     )
-    table("Metode og datakontrol", ["Felt", "Værdi"], metadata)
-    book.get_worksheet_by_name("Metode og datakontrol").set_column(1, 1, 95)
+    table(
+        "Metode og datakontrol",
+        ["Felt", "Værdi"],
+        metadata,
+        widths=[28, 110],
+        wrap_columns=(1,),
+        freeze_columns=1,
+    )
     book.close()
     return output.getvalue()

@@ -324,6 +324,9 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
     issues: list[Issue] = []
     prices: dict[str, tuple[int | None, ...]] = {}
     labels: dict[str, str] = {}
+    companies: dict[str, str] = {}
+    company_fingerprints: dict[str, bytes] = {}
+    conflicted_companies: set[str] = set()
     source_rows: dict[str, tuple[int, ...]] = {}
     conflicts: set[str] = set()
     conflicted_periods: dict[str, set[date]] = {}
@@ -371,9 +374,16 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
                         "Priskalenderen afviger fra 14 dage; tvetydige naboberegninger udelades.",
                     )
                 )
-        label_col = next(
-            (i for i, v in enumerate(values) if normal_header(v) == "lægemiddel"), None
-        )
+        # Display metadata is optional and never participates in calculations or identity.
+        # Ignore ambiguous headings and unevaluated formulas rather than guess a label.
+        display_cols = []
+        company_col: int | None = None
+        for heading in ("lægemiddel", "styrke", "form", "pakning", "firma"):
+            matches = [i for i, v in enumerate(values) if normal_header(v) == heading]
+            if len(matches) == 1:
+                display_cols.append(matches[0])
+                if heading == "firma":
+                    company_col = matches[0]
         for rowno, row in rows:
 
             def cell_at(col: int, row: list[Any] = row) -> Any:
@@ -451,14 +461,38 @@ def parse_lms_history(data: bytes, name: str = "history.xlsx") -> HistoryDataset
             else:
                 prices[pid] = converted
             source_rows[pid] = (*source_rows.get(pid, ()), rowno)
-            if label_col is not None:
-                label = cell_at(label_col)
+            parts = []
+            for col in display_cols:
+                label = cell_at(col)
                 if label is not None and label.data_type not in ("f", "e"):
-                    labels[pid] = str(label.value or "")[:200]
+                    normalized = " ".join(str(label.value or "").split())
+                    text = normalized[:200]
+                    if col == company_col and text and pid not in conflicted_companies:
+                        # Compare full values while bounding retained display metadata.
+                        fingerprint = hashlib.sha256(normalized.encode()).digest()
+                        if pid in companies and company_fingerprints[pid] != fingerprint:
+                            companies.pop(pid)
+                            company_fingerprints.pop(pid)
+                            conflicted_companies.add(pid)
+                        else:
+                            companies[pid] = text
+                            company_fingerprints[pid] = fingerprint
+                    if text and text not in parts:
+                        parts.append(text)
+            if parts:
+                labels[pid] = " · ".join(parts)
             if len(issues) > 10000:
                 raise DataError("For mange ugyldige AIP-værdier; kontroller LMS-eksporten.")
         return HistoryDataset(
-            source, periods, prices, labels, source_rows, issues, conflicts, conflicted_periods
+            source,
+            periods,
+            prices,
+            labels,
+            source_rows,
+            issues,
+            conflicts,
+            conflicted_periods,
+            companies,
         )
     finally:
         book.close()

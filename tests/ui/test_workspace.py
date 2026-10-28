@@ -2,10 +2,13 @@
 
 from dataclasses import replace
 from datetime import date, timedelta
+from functools import partial
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from streamlit.testing.v1 import AppTest
+from streamlit.testing.v1.element_tree import Dataframe
 
 from bef_redbird.charts import history_chart
 from bef_redbird.domain import (
@@ -22,9 +25,41 @@ from bef_redbird.domain import (
     ReviewState,
     SourceInfo,
 )
-from bef_redbird.ui import _percentage_input
+from bef_redbird.ui import _inspect_table, _percentage_input
 
 APP = Path(__file__).resolve().parents[2] / "app.py"
+
+
+def candidate_table(app: AppTest) -> Dataframe:
+    return next(frame for frame in app.dataframe if "Vare" in frame.value.columns)
+
+
+def selected_table_ids(app: AppTest) -> tuple[str, ...]:
+    frame = candidate_table(app)
+    rows = app.session_state[frame.key]["selection"]["rows"]
+    return tuple(frame.value.iloc[row]["Varenr."] for row in rows)
+
+
+def select_table_product(app: AppTest, product_id: str | None) -> AppTest:
+    """Exercise the registered native-table callback against its rendered row map.
+
+    AppTest's Dataframe currently has no selection API. Bind its session only while
+    invoking the actual registered callback; Chromium tests cover browser events,
+    including client-side sorting. Never assign the inspected product directly.
+    """
+    frame = candidate_table(app)
+    metadata = app._session_state._state._new_widget_state.widget_metadata[frame.proto.id]
+    callback = metadata.callback
+    assert isinstance(callback, partial) and callback.func is _inspect_table
+    key, ids, analysis_id = callback.args
+    assert key == frame.key
+    assert ids == tuple(frame.value["Varenr."])
+    assert analysis_id == app.session_state["analysis"].analysis_id
+    rows = [] if product_id is None else [ids.index(product_id)]
+    app.session_state[key] = {"selection": {"rows": rows}}
+    with patch("bef_redbird.ui.st.session_state", app.session_state):
+        callback()
+    return app.run()
 
 
 def synthetic_analysis(count: int = 120, *, rankable: bool = True) -> AnalysisResult:
@@ -87,9 +122,12 @@ def synthetic_analysis(count: int = 120, *, rankable: bool = True) -> AnalysisRe
     )
 
 
-def loaded_app(analysis: AnalysisResult | None = None) -> AppTest:
+def loaded_app(analysis: AnalysisResult | None = None, *, show_review: bool = True) -> AppTest:
     app = AppTest.from_file(str(APP), default_timeout=20)
     app.session_state["analysis"] = analysis or synthetic_analysis()
+    # Existing review-workflow tests explicitly start with the optional editor enabled.
+    if show_review:
+        app.session_state["show_review"] = True
     return app.run()
 
 
@@ -110,7 +148,7 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     app.number_input(key=f"queue_n_{aid}").set_value(80).run()
     assert not app.exception
     assert any("Viser 80 af 80" in item.value for item in app.caption)
-    app.selectbox(key=f"product_{aid}").select("000080").run()
+    select_table_product(app, "000080")
     app.text_area(key=f"review_note_{aid}_000080").input("Bevar min note")
     app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
     app.checkbox(key=f"review_selected_{aid}_000080").check()
@@ -127,28 +165,26 @@ def test_custom_queue_preserves_review_inspection_and_identity() -> None:
     assert any("Alle 120 prioriterbare" in item.value for item in app.caption)
     app.selectbox(key=f"queue_mode_{aid}").select("Alle kandidater").run()
     assert app.session_state["review"].queue.mode == "all_rankable"
-    app.selectbox(key=f"product_{aid}").select("000001").run()
+    select_table_product(app, "000001")
     assert app.text_area(key=f"review_note_{aid}_000001").value == ""
-    app.selectbox(key=f"product_{aid}").select("000080").run()
+    select_table_product(app, "000080")
     assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar min note"
     assert app.selectbox(key=f"review_status_{aid}_000080").value == "Interessant"
     assert not app.exception
 
 
-def test_native_detail_tab_state_survives_queue_changes() -> None:
+def test_review_remains_available_beside_price_evidence_without_tabs() -> None:
     app = loaded_app()
     aid = "synthetic-analysis"
-    tab_key = f"detail_tabs_{aid}"
-    assert app.session_state[tab_key] == "Prishistorik"
-    # AppTest exposes native tab state but has no tab-click helper.
-    app.session_state[tab_key] = "Vurdering"
-    app.run()
-    app.number_input(key=f"queue_n_{aid}").set_value(80).run()
-    assert app.session_state[tab_key] == "Vurdering"
-    app.number_input(key=f"queue_n_{aid}").set_value(17).run()
-    assert app.session_state[tab_key] == "Vurdering"
+    app.text_area(key=f"review_note_{aid}_000001").input("Bevar kladden").run()
+    for count in (80, 17):
+        app.number_input(key=f"queue_n_{aid}").set_value(count).run()
+        assert app.text_area(key=f"review_note_{aid}_000001").value == "Bevar kladden"
+        assert len(app.get("plotly_chart")) == 1
+        assert not app.tabs
     app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
-    assert app.session_state[tab_key] == "Vurdering"
+    assert app.text_area(key=f"review_note_{aid}_000001").value == "Bevar kladden"
+    assert app.number_input(key=f"queue_n_{aid}").disabled
     assert not app.exception
 
 
@@ -187,16 +223,19 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     analysis = synthetic_analysis()
     app = loaded_app(analysis)
     aid = analysis.analysis_id
-    app.number_input(key=f"queue_n_{aid}").set_value(queue.top_n).run()
+    app.number_input(key=f"queue_n_{aid}").set_value(80).run()
     if queue.mode == "all_rankable":
         app.selectbox(key=f"queue_mode_{aid}").select("Alle prioriterbare").run()
-    app.selectbox(key=f"product_{aid}").select("000080").run()
+    select_table_product(app, "000080")
     app.text_area(key=f"review_note_{aid}_000080").input("Gammel periodes note")
     app.selectbox(key=f"review_status_{aid}_000080").select("Interessant")
     app.checkbox(key=f"review_selected_{aid}_000080").check()
     next(b for b in app.button if b.label == "Gem vurdering").click().run()
+    if queue.mode == "top_n":
+        app.number_input(key=f"queue_n_{aid}").set_value(queue.top_n).run()
     app.button(key="prepare_excel").click().run()
     assert "prepared_export" in app.session_state
+    old_table_key = candidate_table(app).key
 
     def replacement(
         snapshot: CitoSnapshot,
@@ -225,7 +264,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     assert review.selected_ids == set()
     assert review.inspected_id == "000001"
     assert app.number_input(key=f"queue_n_{new_aid}").value == queue.top_n
-    expected_mode = "Alle prioriterbare" if queue.mode == "all_rankable" else "Top N"
+    expected_mode = "Alle prioriterbare" if queue.mode == "all_rankable" else "Prioriteret liste"
     assert app.selectbox(key=f"queue_mode_{new_aid}").value == expected_mode
     assert app.text_area(key=f"review_note_{new_aid}_000001").value == ""
     assert not app.checkbox(key=f"review_selected_{new_aid}_000001").value
@@ -233,7 +272,7 @@ def test_replacement_preserves_queue_and_clears_analysis_bound_state(
     for key in (
         f"queue_n_{aid}",
         f"queue_mode_{aid}",
-        f"product_{aid}",
+        old_table_key,
         f"review_note_{aid}_000080",
         f"review_status_{aid}_000080",
         f"review_selected_{aid}_000080",
@@ -277,7 +316,7 @@ def test_failed_replacement_preserves_queue_and_analysis_bound_state(
     assert app.session_state["prepared_export"] == prepared
     assert app.number_input(key=f"queue_n_{aid}").value == 80
     assert app.selectbox(key=f"queue_mode_{aid}").value == "Alle prioriterbare"
-    assert app.selectbox(key=f"product_{aid}").value == "000080"
+    assert app.session_state["review"].inspected_id == "000080"
     assert app.text_area(key=f"review_note_{aid}_000080").value == "Bevar alt"
     assert any("Syntetisk afvist" in item.value for item in app.error)
     assert not app.exception
@@ -308,7 +347,7 @@ def test_unrankable_and_no_candidate_states() -> None:
     app = loaded_app(synthetic_analysis(3, rankable=False))
     assert any("Viser 0 af 50" in item.value for item in app.caption)
     assert any("Ingen produkter i denne visning" in item.value for item in app.info)
-    app.selectbox(key="queue_mode_synthetic-analysis").select("Uden prioritet").run()
+    app.selectbox(key="queue_mode_synthetic-analysis").select("Kan ikke prioriteres").run()
     assert any("3 synlige" in item.value for item in app.caption)
     assert not app.exception
     empty = loaded_app(synthetic_analysis(0))
@@ -367,7 +406,9 @@ def test_screening_precision_and_limited_denominator() -> None:
     )
     analysis.snapshot.incomplete_groups.add("001")
     app = loaded_app(analysis)
-    assert any("0,005 DKK" in item.value for item in app.text)
+    assert any("0,01 DKK" in item.value for item in app.text)
+    assert app.session_state["analysis"].candidates["000001"].features.median_ore == 10000.5
+    assert app.session_state["analysis"].candidates["000001"].features.median_distance_dkk == 0.005
     assert any("Begrænset grundlag" in item.value for item in app.text)
     assert any("uafklarede rækker i gruppen" in item.value for item in app.warning)
     assert not app.exception
@@ -397,9 +438,12 @@ def test_unexpected_failure_is_safe_and_preserves_workspace(
     assert not app.exception
 
 
-def test_restored_review_synchronizes_existing_frontend_preferences() -> None:
-    app = loaded_app()
+@pytest.mark.parametrize("show_review", [False, True])
+def test_restored_review_synchronizes_existing_frontend_preferences(show_review: bool) -> None:
+    app = loaded_app(show_review=show_review)
     aid = "synthetic-analysis"
+    select_table_product(app, "000002")
+    assert selected_table_ids(app) == ("000002",)
     app.number_input(key=f"queue_n_{aid}").set_value(17).run()
     restored = ReviewState(aid)
     restored.queue = replace(restored.queue, top_n=80)
@@ -409,6 +453,11 @@ def test_restored_review_synchronizes_existing_frontend_preferences() -> None:
     app.session_state["sync_review_widgets"] = True
     app.run()
     assert app.number_input(key=f"queue_n_{aid}").value == 80
+    assert selected_table_ids(app) == ("000001",)
+    assert app.toggle(key="show_review").value == show_review
+    if not show_review:
+        assert not app.text_area
+        app.toggle(key="show_review").set_value(True).run()
     assert app.text_area(key=f"review_note_{aid}_000001").value == "Gendannet note"
     assert not app.exception
 
