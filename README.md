@@ -1,4 +1,4 @@
-# bef-redbird
+# Apotek
 
 A Danish browser workspace for pharmaceutical procurement **review**. Import a
 Cito snapshot and LMS price history, confirm the report period, investigate a
@@ -33,16 +33,68 @@ No hosted instance or access-control verification is implied by these commands.
 3. Type any positive **Antal kandidater** (initially 50), or choose **Alle
    prioriterbare**. This slices the existing full ranking and preserves reviews.
    Search filters the chosen scope; it does not promote products into the queue.
-4. Select a row or use the product selector. Inspect the observed AIP chart and
-   **Fundne alternativer i rapporten**. Current report groups are not historical
-   memberships or a verified complete market. Package AIP is not a unit-price
-   or dispensing-price comparison.
-5. Save a review status and plain-text note; mark export selections separately.
-   Export the canonical queue, explicit selection or all eligible candidates.
-   Download a JSON session copy before disconnecting or replacing an analysis.
+4. Select a row in the left candidate table. The right chart follows that candidate. Optional
+   medicine, strength, form, pack and company labels distinguish products.
+   **Forrige kandidat / Næste kandidat** follow the filtered list in canonical order; table sorting
+   changes only the table. Its checkmark follows the active candidate across navigation;
+   checking substitutes for the chart leaves that candidate checkmark unchanged. If filters
+   hide the active candidate, no visible row is checked until it reappears.
+   **Sammenlign priser** shows the selected period's LMS AIP as
+   **Kostpris fra LMS**, the product's own historical median, and **Afstand til median**
+   on the right (median minus that LMS price). Missing LMS prices stay missing;
+   Cito/LMS mismatch warnings remain visible. Check alternatives below the chart to compare their
+   curves (up to five); uncheck to hide them. Only the selected candidate's found group
+   is offered. **Vis** on an alternative's row explicitly opens that eligible product.
+   All found group members remain inspectable, including H/K and missing history.
+   Current groups are not historical memberships or a verified complete market.
+   Package AIP is not a unit-price or dispensing-price comparison.
+5. Optionally enable **Vis vurdering** above the workspace to open **Gem din vurdering**
+   and choose status, note and export inclusion. It is hidden by default so the workspace
+   focuses on candidates and prices. Hiding it preserves saved assessments and drafts.
+   Drafts survive product changes in this session. **Gem vurdering** commits them to exports;
+   **Gem og næste kandidat** saves and opens the next visible candidate. Only saved reviews
+   appear in downloads. Replacing the analysis requires acknowledging saved work
+   or unsaved drafts; restoring a JSON copy deliberately replaces both.
+6. Open **Eksport og sessionskopi**. Export the canonical queue, explicit selection
+   or all eligible candidates. Excel opens on **Indkøbsoverblik**, a concise decision
+   sheet with names, reviews and prices. **Kandidater** retains full evidence,
+   **Gruppeoverblik** retains all found alternatives, and **Metode og datakontrol**
+   records the reproducible scope. Download JSON before disconnecting or replacing
+   the analysis. Excel and JSON contain saved judgments, not unfinished drafts.
 
-On desktop, the candidate list stays beside the selected product's price-history,
-alternatives and review tabs. Narrow screens stack the two panels.
+The workspace shows the candidate list on the left and price comparison on the right,
+with matching panel borders. The table stays 420 pixels tall and the chart stays
+360 pixels tall, including its legend. Larger groups extend downward below the chart;
+adding alternatives or curves does not shrink its plotting area. The optional assessment appears
+below both panels only when **Vis vurdering** is enabled. Chart controls and the plot fit
+a laptop viewport when scrolled to the workspace; larger groups and warnings need more space.
+The two panels stack on narrow screens; outlined previous/next buttons stay with the
+selected medicine. Every found alternative is
+shown directly, with product number, LMS company, package AIP and current/upcoming
+classes aligned in each row.
+Shared medicine names and dosage descriptions stay in help and **Gruppedetaljer**;
+the latter uses wrapping product cards rather than a wide table. Missing prices and
+H/K storage markers remain on the rows; missing-history controls explain why no curve
+can be shown. The heading gives the actual number of found alternatives and how many
+are selected; the five-curve limit is explained separately. Chart legends use product
+number and company. Contrasting colours, distinct line patterns and marker shapes
+identify up to six curves. Hovering a period shows all selected products' observed
+prices together, including coincident prices, without shifting any values or dates.
+Period-range options and **Senere priser** are directly visible
+above the chart, alongside **Gruppedetaljer**; **Filtre** holds group/review filters.
+Import and export controls stay in disclosures.
+Per-product comparison choices survive product changes; a prepared Excel download
+survives inspection changes but is invalidated when saved reviews or its scope change.
+
+Prices and monetary differences display two decimal places throughout the app and Excel.
+Half-øre medians and differences retain their precision in calculations and exported
+numeric cells; rounding is for display only (half-øre ties round away from zero).
+
+At the bottom, **Sådan læses analysen** documents how the sources relate, candidate
+selection, rankability checks, exact calculations and prioritization. It shows the
+loaded analysis's applied settings and dates, not pending edits. Historical counts
+and events remain available below the assessment. No calculation or schema version
+changes are needed for this presentation-only layout and documentation change.
 
 Everything is temporary and isolated to the browser session. Restart/disconnection
 can lose uploads and notes. Restore JSON only after loading identical source bytes,
@@ -52,7 +104,8 @@ approved private storage outside this checkout.
 
 ## Input and calculation policies
 
-`CODEX_HANDOVER.md` is the maintained specification. The implementation retains
+[Calculation and data contracts](docs/calculations.md) describe the implemented
+rules and their boundaries. The implementation retains
 `historical-priority-v1`: low historical price position and repeated rises define
 tiers; ties use median distance descending, percentile ascending, then product ID.
 This has no validated commercial-performance claim. Current AIP must exist at the
@@ -73,11 +126,13 @@ Duplicate date headers are rejected as ambiguous, even if source values happen
 to match. Duplicate identical six-field Cito rows collapse with source row references;
 conflicts remove the product from calculation and flag affected group context.
 Blank storage is retained as unspecified; blank classifications never pass the
-candidate filter. Missing groups never join each other. Optional names are display
-labels only.
+candidate filter. Missing groups never join each other. Optional names, strength,
+form, pack and company are display labels only; formulas/errors and ambiguous
+optional headings are ignored for labels. These display additions do not change
+calculation definitions, method versions, analysis identity or JSON compatibility.
 
-Optional LMS metadata before or after the date block is ignored. Unknown/blank
-headings inside that block and malformed date-like headings remain errors;
+Unrecognised optional LMS metadata before or after the date block is ignored.
+Unknown/blank headings inside that block and malformed date-like headings remain errors;
 recognised reference fields may be reordered between dates. Conflicting duplicate
 AIP observations become explicit gaps only at the affected periods. A conflict
 blocks ranking only inside the applied history window at or before the confirmed

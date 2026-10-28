@@ -89,6 +89,7 @@ class HistoryDataset:
     conflicted_ids: set[str] = field(default_factory=set)
     # Ambiguity belongs to observations, not to the product's entire timeline.
     conflicted_periods: dict[str, set[date]] = field(default_factory=dict)
+    companies: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

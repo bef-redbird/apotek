@@ -8,14 +8,21 @@ host and account. A private GitHub repository is not processing permission.
 ## Community Cloud configuration
 
 Streamlit Community Cloud supports private GitHub repositories. In the authorised
-workspace, create an app from `bef-redbird/bef-redbird`, the reviewed default branch
+workspace, create an app from `bef-redbird/apotek`, the reviewed default branch
 and `app.py`, selecting Python 3.12. Keep **Only specific people can view this app**
 enabled and configure approved viewers through host-managed identity. Viewer
 access does not require repository write permission. Do not make the app public
 to work around account limits. The provider currently permits one private app;
 verify the account's actual entitlement and sharing policy before deploying.
 
-The runtime `requirements.txt` is generated from `uv.lock`:
+Community Cloud prioritizes the root `uv.lock` over `requirements.txt`.
+The project disables default uv dependency groups so an ordinary sync installs
+runtime dependencies only. Development and browser checks explicitly opt into
+their groups. Check the cloud build log to confirm the selected installer.
+See [dependency-file precedence](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies).
+
+For hosts that use requirements files, the runtime `requirements.txt` is generated
+from `uv.lock`:
 
 ```text
 uv export --locked --no-dev --no-group browser --no-emit-project --format requirements-txt --output-file requirements.txt
@@ -85,17 +92,17 @@ does not downsample observations to fit a small host.
 
 Set `REDBIRD_PRIVATE_CITO_PATH` and `REDBIRD_PRIVATE_LMS_PATH` to authorised absolute
 paths outside Git. Optionally set `REDBIRD_PRIVATE_PERIOD` to an independently
-confirmed ISO period date (the fixture test defaults to the handover's 2026-09-28
+confirmed ISO period date (the reference fixture test defaults to a 2026-09-28
 test context, not an asserted date for a different report). Then run:
 
 ```text
-uv run pytest -m private tests/private -q -s --tb=short --assert=plain
+uv run --group dev pytest -m private tests/private -q -s --tb=short --assert=plain
 ```
 
 The check compares aggregate counts and a small source-cell sample using an
 independent raw-cell pass, reports hashes, elapsed import time and process memory,
 and verifies unchanged source hashes. Different hashes produce observed counts;
-they do not inherit the handover fixture's expected shortlist. Missing paths skip
+they do not inherit the reference fixture's expected shortlist. Missing paths skip
 honestly. Never set private paths in CI or publish product-level failure output.
 `--tb=short --assert=plain` reduces accidental diagnostic exposure; run only in approved private
 development environments. Default CI uses wholly synthetic recipes.
