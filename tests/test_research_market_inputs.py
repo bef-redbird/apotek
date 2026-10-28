@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bef_redbird.research import e4_features, market_inputs
+from bef_redbird.research import e4_features, group_features, market_inputs
 from bef_redbird.research.dataset import ResearchError
 from bef_redbird.research.e4_common import read
 from bef_redbird.research.e4_features import native
@@ -93,6 +93,7 @@ def test_native_identity_continues_no_exit_but_not_recreated_or_exited_packages(
     )
     raw, _ = native(snapshot, previous)
     assert raw.iloc[0].exit_date == date(1900, 1, 1)
+    assert raw.iloc[0].classification_state == "missing_record"
     assert (raw.iloc[0].canonical_identity == "accepted-prior-identity") == continues
 
 
@@ -103,6 +104,60 @@ def test_nullable_money_preserves_exact_integers_above_float_precision(tmp_path:
     restored = e4_features.records(pd.read_parquet(path))
     assert restored == [{"aip_ore": 9007199254740993}, {"aip_ore": None}]
     assert type(restored[0]["aip_ore"]) is int
+
+
+@pytest.mark.parametrize("abc,group", [("X", "0001"), ("b", "0001"), ("A", "bad!"), ("A", "0001")])
+def test_native_classification_fields_are_validated_before_peer_features(
+    tmp_path: Path,
+    abc: str,
+    group: str,
+) -> None:
+    packages, prices, classes = [], [], []
+    for number in (b"000123", b"000124"):
+        package = bytearray(b" " * 137)
+        package[0:17] = b"00000000001" + number
+        package[59:69] = b"30      TL"
+        package[73:78] = b"B    "
+        package[103:111] = b"20200101"
+        packages.append(bytes(package))
+        prices.append(number + b"000001234" + b" " * 81)
+        classification = bytearray(b" " * 47)
+        classification[0:18] = group.encode() + number + b"30      "
+        classification[34:35] = abc.encode()
+        classes.append(bytes(classification))
+    original = tmp_path / "native.zip"
+    with zipfile.ZipFile(original, "w") as archive:
+        for number, rows in (
+            (1, [b"00000000001" + b" " * 169]),
+            (2, packages),
+            (3, prices),
+            (4, classes),
+            (15, []),
+        ):
+            archive.writestr(f"LMS{number:02}.TXT", b"\r\n".join(rows))
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(json.dumps({"period": "2026-01-05", "original": pin(original)}))
+    raw, members = native(snapshot, pd.DataFrame())
+    valid_group = group == "0001"
+    valid_abc = abc == "A"
+    assert raw.abc.tolist() == (["A"] * 2 if valid_abc else [None] * 2)
+    assert raw.group_code.tolist() == (["0001"] * 2 if valid_group else [None] * 2)
+    assert (
+        raw.classification_state.tolist()
+        == ["observed" if valid_group and valid_abc else "invalid"] * 2
+    )
+    assert [member["group_code"] for member in members] == raw.group_code.tolist()
+    assert [member["abc"] for member in members] == raw.abc.tolist()
+    base = e4_features.advance(raw, pd.DataFrame(), pd.DataFrame(), inputs()[2])
+    assert base.eligible.all()
+    assert base.abc.tolist() == (["A"] * 2 if valid_group and valid_abc else [None] * 2)
+    joined = raw.merge(
+        base[["package_number", "eligible", "row_key", "period_index"]], on="package_number"
+    )
+    peers, _ = group_features.period_features(e4_features.records(joined), members, {})
+    assert [row["peer_feature_state"] for row in peers] == [
+        "complete_equal_size_peers" if valid_group else "unobserved_group"
+    ] * 2
 
 
 def test_mixed_missing_prices_and_interrupted_checkpoint_publication(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -100,6 +101,8 @@ def native(snapshot: Path, previous: pd.DataFrame) -> tuple[pd.DataFrame, list[d
             dictionaries[4].get(package, {}),
         )
         old = prior.get(package)
+        abc_valid = g.get("abc_code") in {"A", "B", "C"}
+        group_valid = re.fullmatch(r"[0-9]{4}", g.get("group_code") or "") is not None
         created = p["creation_date"]
         valid = p["drug_id"] and created and created != date(1900, 1, 1) and created <= day
         continuation = bool(
@@ -142,9 +145,13 @@ def native(snapshot: Path, previous: pd.DataFrame) -> tuple[pd.DataFrame, list[d
             "fee_basis": "excluding_consumer_dispensing_fees",
             "price_basis": "per_package",
             "price_role": "effective_price",
-            "abc": g.get("abc_code"),
-            "group_code": g.get("group_code"),
-            "classification_state": "observed" if g else "missing_record",
+            "abc": g.get("abc_code") if abc_valid else None,
+            "group_code": g.get("group_code") if group_valid else None,
+            "classification_state": "missing_record"
+            if not g
+            else "observed"
+            if abc_valid and group_valid
+            else "invalid",
             **{k: d.get(k) for k in ("atc", "form_code", "strength", "strength_unit")},
             **{
                 k: p.get(k)

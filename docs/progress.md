@@ -27,6 +27,12 @@ part of this application PR. They remain preserved in the local operator workspa
 Required retained source components are copied unchanged rather than rewriting
 verified inference to reduce file counts.
 
+The protocol also pins an older research-report producer. It is not loaded or
+called by the pharmacist workflow. Its historical freeze-attempt report cache can
+omit later supplementary attempts; that limitation is recorded and deferred.
+Changing those frozen bytes would invalidate the accepted protocol. The local
+pharmacist report uses the separate assessment publisher and verified saved results.
+
 Independent private checks reproduced ranking and original-source outcomes; actual
 browser checks cover upload, wrong period, comparison, navigation, tooltips, notes,
 reconnection and PDF download. Focused synthetic lifecycle, scientific-boundary and
