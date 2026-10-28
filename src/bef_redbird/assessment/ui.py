@@ -575,7 +575,7 @@ def main(configuration: Path | None) -> None:
     st.divider()
     st.subheader("Tag overblikket med")
     if st.button("Opret PDF-rapport"):
-        from .report import export_pdf
+        from .report import publish_pdf
 
         available = saved_assessments(root)
         selected = [
@@ -584,44 +584,11 @@ def main(configuration: Path | None) -> None:
             if any(x[0]["origin"] == p["origin"] for x in available)
         ]
         if selected:
-            from bef_redbird.research.e4_common import identity
-            from bef_redbird.research.group_features import pin
-
-            from . import report as report_module
-
-            destination = (
-                root
-                / "exports"
-                / (
-                    identity(
-                        {
-                            "assessments": [x[0]["assessment_id"] for x in selected],
-                            "producer": pin(Path(str(report_module.__file__)))["sha256"],
-                        }
-                    )
-                    + ".pdf"
-                )
-            )
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            from bef_redbird.research.group_features import pin
-            from bef_redbird.research.prospective import write_once
-
-            export_receipt = destination.with_suffix(".json")
-            if not destination.exists():
-                export_pdf(selected, destination)
-                write_once(
-                    export_receipt,
-                    {
-                        "pdf": pin(destination),
-                        "assessments": [x[0]["assessment_id"] for x in selected],
-                    },
-                )
-            else:
-                checked(read(export_receipt)["pdf"])
-            st.session_state["export"] = str(destination)
+            st.session_state["export"] = str(publish_pdf(selected, root / "exports"))
     if st.session_state.get("export"):
-        path = Path(st.session_state["export"])
-        checked(read(path.with_suffix(".json"))["pdf"])
+        from .report import verify_published_pdf
+
+        path = verify_published_pdf(Path(st.session_state["export"]))
         st.download_button(
             "Hent PDF til manuel deling",
             path.read_bytes(),

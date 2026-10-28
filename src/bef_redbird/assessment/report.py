@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 import pymupdf
+
+from bef_redbird.research.e4_common import checked, frozen_json, identity, read
+from bef_redbird.research.group_features import pin
+from bef_redbird.research.prospective import publish_directory
 
 _CSS = """
 body {font-family: sans-serif; font-size: 9pt; color: #183436;}
@@ -25,6 +31,53 @@ td {border-bottom: 0.5pt solid #dbe6e2; text-align: right; padding: 3pt 4pt;}
 .left {text-align: left;}
 .alternate {background: #f2f7f5;}
 """
+
+
+def verify_published_pdf(path: Path, expected_binding: dict[str, Any] | None = None) -> Path:
+    """Verify publication identity and both immutable files without creating anything."""
+    path = path.resolve()
+    saved = read(path.with_suffix(".json"))
+    binding = saved["binding"]
+    if (
+        (expected_binding is not None and binding != expected_binding)
+        or path.name != "report.pdf"
+        or path.parent.name != identity(binding)
+        or Path(saved["pdf"]["path"]) != path
+        or Path(saved["producer"]["path"]) != path.parent / "producer.py"
+        or saved["producer"]["sha256"] != binding["producer_sha256"]
+    ):
+        raise ValueError("assessment_pdf_publication_identity_changed")
+    checked(saved["producer"])
+    return checked(saved["pdf"])
+
+
+def publish_pdf(assessments: list[tuple[dict[str, Any], pd.DataFrame]], root: Path) -> Path:
+    """Publish a complete immutable PDF/receipt/source bundle, or retry a fresh stage."""
+    source = Path(__file__).read_bytes()
+    binding = {
+        "assessments": [manifest["assessment_id"] for manifest, _ in assessments],
+        "producer_sha256": hashlib.sha256(source).hexdigest(),
+    }
+    destination = root / identity(binding)
+
+    if destination.exists():
+        return verify_published_pdf(destination / "report.pdf", binding)
+    stage = root / (".stage-" + uuid4().hex)
+    stage.mkdir(parents=True, exist_ok=False)
+    export_pdf(assessments, stage / "report.pdf")
+    (stage / "producer.py").write_bytes(source)
+    references = {}
+    for key, name in (("pdf", "report.pdf"), ("producer", "producer.py")):
+        references[key] = {**pin(stage / name), "path": str((destination / name).resolve())}
+    frozen_json(stage / "report.json", {"binding": binding, **references})
+    try:
+        publish_directory(stage, destination)
+    except OSError:
+        # A concurrent identical export may win the atomic rename. Only its
+        # complete, matching, hash-verified publication is safe to reuse.
+        if not destination.exists():
+            raise
+    return verify_published_pdf(destination / "report.pdf", binding)
 
 
 def _number(value: Any, *, percent: bool = False) -> str:

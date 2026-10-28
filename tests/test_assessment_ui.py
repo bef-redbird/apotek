@@ -227,7 +227,7 @@ def test_durable_notes_and_explicit_pdf_without_inference(workspace: tuple) -> N
     assert fresh.text_area[0].value == "Spørg om levering"
     next(item for item in fresh.button if item.label == "Opret PDF-rapport").click().run()
     assert not fresh.exception
-    pdfs = list((root / "exports").glob("*.pdf"))
+    pdfs = list((root / "exports").glob("*/report.pdf"))
     assert len(pdfs) == 1
     original = pdfs[0].read_bytes()
     with pymupdf.open(pdfs[0]) as document:
@@ -236,7 +236,7 @@ def test_durable_notes_and_explicit_pdf_without_inference(workspace: tuple) -> N
     next(item for item in fresh.button if item.label == "Opret PDF-rapport").click().run()
     assert not fresh.exception and pdfs[0].read_bytes() == original
     assert len(fresh.get("download_button")) == 1
-    assert len(list((root / "exports").glob("*.pdf"))) == 1
+    assert len(list((root / "exports").glob("*/report.pdf"))) == 1
 
 
 def test_submit_is_only_launch_boundary(workspace: tuple, monkeypatch: pytest.MonkeyPatch) -> None:

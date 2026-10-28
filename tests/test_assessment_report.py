@@ -1,6 +1,8 @@
 """The portable report preserves the frozen queue and explicit missingness."""
 
+import json
 import re
+import shutil
 from pathlib import Path
 from unicodedata import normalize
 
@@ -8,6 +10,7 @@ import pandas as pd
 import pymupdf
 import pytest
 
+from bef_redbird.assessment import report
 from bef_redbird.assessment.report import export_pdf
 
 
@@ -136,6 +139,98 @@ def test_growing_history_paginates_every_assessment_identity_without_shrinking(
             for word in page.get_text("words"):
                 assert 0 <= word[0] < word[2] <= page.rect.width
                 assert 0 <= word[1] < word[3] <= page.rect.height
+
+
+@pytest.mark.parametrize("failure", ["partial_pdf", "receipt", "rename"])
+def test_pdf_bundle_recovers_interrupted_publication_and_reuses_verified_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    manifest, frame = sample()
+    root = tmp_path / "exports"
+    method = {"partial_pdf": "export_pdf", "receipt": "frozen_json", "rename": "publish_directory"}[
+        failure
+    ]
+    original = getattr(report, method)
+
+    def interrupted(*args: object) -> None:
+        if failure == "partial_pdf":
+            path = args[1]
+            assert isinstance(path, Path)
+            path.write_bytes(b"%PDF-incomplete")
+        raise OSError("synthetic interrupted export")
+
+    monkeypatch.setattr(report, method, interrupted)
+    with pytest.raises(OSError, match="interrupted export"):
+        report.publish_pdf([(manifest, frame)], root)
+    stages = list(root.glob(".stage-*"))
+    assert len(stages) == 1
+    retained = {path.name: path.read_bytes() for path in stages[0].iterdir()}
+    assert all(path.name.startswith(".stage-") for path in root.iterdir())
+    monkeypatch.setattr(report, method, original)
+    result = report.publish_pdf([(manifest, frame)], root)
+    assert {path.name: path.read_bytes() for path in stages[0].iterdir()} == retained
+    receipt = report.read(result.with_suffix(".json"))
+    assert report.checked(receipt["pdf"]) == result.resolve()
+    assert report.checked(receipt["producer"]).read_bytes() == Path(report.__file__).read_bytes()
+    before = {path.name: path.read_bytes() for path in result.parent.iterdir()}
+    monkeypatch.setattr(report, "export_pdf", lambda *args: pytest.fail("retry regenerated PDF"))
+    assert report.publish_pdf([(manifest, frame)], root) == result
+    assert {path.name: path.read_bytes() for path in result.parent.iterdir()} == before
+    result.write_bytes(b"corrupt complete publication")
+    with pytest.raises(ValueError):
+        report.publish_pdf([(manifest, frame)], root)
+
+
+@pytest.mark.parametrize(
+    "defect", ["binding", "producer_rebind", "producer_repoint", "pdf_repoint"]
+)
+def test_pdf_publication_rebinding_rejected_on_reuse_and_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    defect: str,
+) -> None:
+    manifest, frame = sample()
+    root = tmp_path / "exports"
+    path = report.publish_pdf([(manifest, frame)], root)
+    receipt_path = path.with_suffix(".json")
+    receipt = report.read(receipt_path)
+    if defect == "binding":
+        receipt["binding"]["assessments"] = ["c" * 64]
+    elif defect == "producer_rebind":
+        source = path.parent / "producer.py"
+        source.write_bytes(b"different source")
+        receipt["producer"] = report.pin(source)
+    else:
+        name = "producer" if defect == "producer_repoint" else "pdf"
+        replacement = tmp_path / "outside"
+        replacement.write_bytes(report.checked(receipt[name]).read_bytes())
+        receipt[name] = report.pin(replacement)
+    receipt_path.write_text(json.dumps(receipt))
+    monkeypatch.setattr(
+        report, "export_pdf", lambda *args: pytest.fail("invalid receipt was overwritten")
+    )
+    with pytest.raises(ValueError, match="identity_changed"):
+        report.publish_pdf([(manifest, frame)], root)
+    with pytest.raises(ValueError, match="identity_changed"):
+        report.verify_published_pdf(path)
+
+
+def test_concurrent_pdf_winner_is_verified_and_reused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, frame = sample()
+
+    def another_publication_wins(stage: Path, destination: Path) -> None:
+        shutil.copytree(stage, destination)
+        raise FileExistsError("another identical export was published")
+
+    monkeypatch.setattr(report, "publish_directory", another_publication_wins)
+    path = report.publish_pdf([(manifest, frame)], tmp_path / "exports")
+    assert report.verify_published_pdf(path) == path
+    with pymupdf.open(path) as document:
+        assert len(document) == 4
 
 
 @pytest.mark.parametrize(
