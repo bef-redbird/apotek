@@ -187,8 +187,10 @@ def test_future_column_and_bad_period_are_rejected() -> None:
 
 
 def test_immutable_assessment_idempotence_and_outcome_versions(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Two nested SHA-256 directories need a short root on Windows without long paths.
+    tmp_path = tmp_path_factory.mktemp("e4")
     import bef_redbird.research.e4_assessment as module
 
     f = features()

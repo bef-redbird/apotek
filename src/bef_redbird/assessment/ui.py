@@ -365,11 +365,11 @@ def candidates(
 def main(configuration: Path | None) -> None:
     st.set_page_config(page_title="Apotek · Prisoverblik", page_icon="✚", layout="wide")
     st.markdown(
-        "<style>.block-container{max-width:1480px;padding-top:2rem}h1,h2,h3{color:#163747}div[data-testid=stMetric]{background:#edf5f5;padding:14px;border-radius:10px}</style>",
+        "<style>.block-container{max-width:1480px;padding-top:4.5rem}h1,h2,h3{color:#163747}div[data-testid=stMetric]{background:#edf5f5;padding:14px;border-radius:10px}</style>",
         unsafe_allow_html=True,
     )
     st.caption("APOTEK / FAGLIGT PRISOVERBLIK")
-    st.title("Næste prisperiode, bedre belyst")
+    st.title("Prisestimering – test og resultater")
     st.write(
         "Et samlet overblik over forventede prisbevægelser og de seneste perioders faktiske udfald."
     )
@@ -523,14 +523,14 @@ def main(configuration: Path | None) -> None:
             else:
                 st.info("Den historiske vurdering er endnu ikke forberedt af operatøren.")
     with method_tab:
-        st.subheader("Fra historik til en vurdering")
+        st.subheader("Sådan er prisestimaterne udviklet og testet")
         st.graphviz_chart(
             'digraph { rankdir=LR; node [shape=box,style=rounded]; "Historiske priser" -> '
             '"Understøttede substitutionskonkurrenter" -> "Cito, hvis gyldig" -> '
             '"Sandsynligheder og prisestimat"; }'
         )
         st.write(
-            "AIP betyder apotekets indkøbspris. Vi beregner sandsynligheden for stigning, "
+            "Vi beregner sandsynligheden for stigning, "
             "fald og uændret pris separat fra prisændringens størrelse. Rangeringen "
             "bruger sandsynlighed og et fast risikofilter."
         )

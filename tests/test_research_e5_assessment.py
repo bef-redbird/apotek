@@ -306,8 +306,10 @@ def root_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, P
 
 
 def test_immutable_prepare_exact_replay_and_separate_pending_outcome(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Keep the complete nested assessment/outcome layout below Windows MAX_PATH.
+    tmp_path = tmp_path_factory.mktemp("e5")
     paths = root_fixture(tmp_path, monkeypatch)
     path = module.prepare(tmp_path)
     saved = read(path)
@@ -417,11 +419,12 @@ def test_final_calibration_strict_maturity_and_four_fit_limit(
 
 
 def test_replay_relocates_nested_references_without_original_root(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    original = tmp_path / "original"
-    restored = tmp_path / "restored"
-    hidden = tmp_path / "hidden-original"
+    tmp_path = tmp_path_factory.mktemp("e5")
+    original = tmp_path / "o"
+    restored = tmp_path / "r"
+    hidden = tmp_path / "h"
     original.mkdir()
     root_fixture(original, monkeypatch)
     assessment = module.prepare(original)
@@ -662,8 +665,9 @@ def test_without_explicit_decision_failed_september_fit_remains_strict(
 
 
 def test_resource_fallback_metadata_and_exact_replay_survive_relocation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    tmp_path = tmp_path_factory.mktemp("e5")
     original = tmp_path / "o"
     original.mkdir()
     build_bundle = module.model_bundle
