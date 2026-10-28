@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,17 @@ spec = importlib.util.spec_from_file_location("hygiene", SCRIPT)
 assert spec and spec.loader
 hygiene = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hygiene)
+
+
+@pytest.fixture(autouse=True)
+def isolate_fixture_repositories(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hook's repository environment must never reach synthetic Git repos."""
+    local_names = subprocess.check_output(
+        ["git", "rev-parse", "--local-env-vars"], text=True
+    ).splitlines()
+    for name in local_names:
+        monkeypatch.delenv(name, raising=False)
+    assert not any(name in os.environ for name in local_names)
 
 
 @pytest.mark.parametrize(

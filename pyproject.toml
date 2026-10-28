@@ -1,7 +1,7 @@
 [project]
 name = "bef-redbird"
 version = "0.1.0"
-description = "Deterministic Danish pharmaceutical procurement review workspace"
+description = "Local Danish pharmacist price assessment and review workspace"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "streamlit>=1.66,<2",
@@ -10,8 +10,13 @@ dependencies = [
   "xlsxwriter>=3.2,<4",
   "defusedxml>=0.7.1,<1",
   "pandas>=2.2,<3",
+  "numpy>=2.5.4,<3",
   "xlrd>=2.0.2,<3",
   "olefile>=0.47,<1",
+  "duckdb>=1.5,<1.6",
+  "striprtf>=0.0.29,<0.1",
+  "pymupdf>=1.26,<2",
+  "pyarrow==26.0.0",
 ]
 
 [build-system]
@@ -36,6 +41,13 @@ dev = [
     "types-defusedxml>=0.7.0.20260504",
 ]
 browser = ["pytest-playwright>=0.7,<1"]
+research = [{include-group = "inference"}]
+inference = [
+    "catboost==1.2.8",
+    "scipy==1.18.1",
+    "psutil>=7,<8",
+    "threadpoolctl>=3,<4",
+]
 
 [tool.uv]
 default-groups = []
@@ -60,5 +72,5 @@ disallow_untyped_defs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["plotly.*", "xlsxwriter.*"]
+module = ["plotly.*", "xlsxwriter.*", "pyarrow.*", "catboost.*", "scipy.*", "psutil.*", "threadpoolctl.*"]
 ignore_missing_imports = true

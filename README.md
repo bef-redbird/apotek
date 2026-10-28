@@ -1,5 +1,27 @@
 # Apotek
 
+## Local trained-model workspace
+
+`pharmacist_app.py` reviews saved price assessments using verified, retained
+CatBoost models. The pharmacist uploads only Cito, confirms its actual period and
+receipt context, and explicitly starts analysis. The app shows the same-target
+comparison without Cito, historical prediction-ranked top 50 lists with outcomes,
+package and supported competitor histories, persistent notes and a portable PDF.
+
+The operator prepares market inputs separately. Models, the protocol, source files,
+published inputs and assessments remain private and outside Git. This repository
+does not contain a demonstration dataset or trained models. The viewer never opens
+the operating database; it performs no training, ordering or remote AI calls.
+
+On Windows, run `scripts/Start-Pharmacist.ps1 -ConfigFile <private-config.json>`.
+The launcher installs the locked inference environment and serves only
+`http://127.0.0.1:8530`. See [local operation](docs/deployment.md),
+[data boundaries](docs/data-foundation.md) and [delivery status](docs/progress.md).
+Historical results are diagnostic reconstructions, not prospective confirmation,
+executable quantities, delivery guarantees or pharmacy profit.
+
+## Existing workbook baseline
+
 A Danish browser workspace for pharmaceutical procurement **review**. Import a
 Cito snapshot and LMS price history, confirm the report period, investigate a
 deterministic queue, compare found group alternatives and record a human review.

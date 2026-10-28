@@ -19,11 +19,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.12.13'
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: false
-      - run: uv sync --locked --group dev --group browser
+      - run: uv sync --locked --group dev --group browser --group inference
       - run: uv export --locked --no-dev --no-group browser --no-emit-project --format requirements-txt --output-file requirements.txt
       - run: git diff --exit-code -- requirements.txt
       - run: uv run --no-sync ruff check .
@@ -50,13 +50,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: false
-      - run: uv sync --locked --group dev --group browser
+      # Match the retained runtime, including source-only CPython security releases.
+      - run: uv python install 3.12.13
+      - run: uv sync --locked --python 3.12.13 --group dev --group browser --group inference
       - run: uv run --no-sync python -c "import bef_redbird"
       - run: uv run --no-sync pytest -m 'not browser and not private'
       - run: uv run --no-sync python scripts/check_repo_hygiene.py --tracked
