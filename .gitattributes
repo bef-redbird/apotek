@@ -1,1 +1,15 @@
 * text=auto eol=lf
+
+# Retained inference producers are identified by exact raw-byte hashes.
+# Preserve their accepted bytes across Windows/Linux checkouts.
+src/bef_redbird/research/e2_data.py -text
+src/bef_redbird/research/e2_models.py -text
+src/bef_redbird/research/e3_methods.py -text
+src/bef_redbird/research/e4_assessment.py -text
+src/bef_redbird/research/e4_common.py -text
+src/bef_redbird/research/e4_methods.py -text
+src/bef_redbird/research/e5_experiment.py -text
+src/bef_redbird/research/group_features.py -text
+src/bef_redbird/research/prospective.py -text
+src/bef_redbird/research/prospective_report.py -text
+src/bef_redbird/research/training_contract.py -text
