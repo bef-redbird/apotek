@@ -9,7 +9,7 @@ ignored by Git. The content guard also rejects them if force-staged. Shared prod
 contracts belong in [calculations.md](calculations.md); delivery guidance lives here.
 
 ```text
-uv sync --locked --group dev --group browser
+uv sync --locked --group dev --group browser --group inference
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 uv run ruff check .
 uv run ruff format --check .

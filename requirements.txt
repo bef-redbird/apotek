@@ -66,6 +66,16 @@ defusedxml==0.7.1 \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
     # via bef-redbird
+duckdb==1.5.6 \
+    --hash=sha256:09ff51b230219f0d8b47fc8a1e17fb595ba9fab0c3d96a6de4d00b8ff86b3cf1 \
+    --hash=sha256:166a91dbfacfc0c9f08cc76c0243cb6d3d4296bfab5bad72a3cfb63140a5b7c8 \
+    --hash=sha256:48d07d0651aaeac2c3974afd37599970154b7b79b54c18f27c319c14ccf98d9d \
+    --hash=sha256:79de3dfa8705b1ba0d59e7e3252e40ff399e0afd12f485502a6c7bf7c2fd809a \
+    --hash=sha256:b8d795c8b2d5634b3269f974aa97f1fdf878f62f032317a52252a151b693fb1e \
+    --hash=sha256:bc9619ed7d4ffa117b5155d84b44794366bb6635178d78ed5e13a6024845c757 \
+    --hash=sha256:ce89a1025a5317ebe9c520876c48032b5247ac574865486648b1a004f6009875 \
+    --hash=sha256:dcccce20965e6986cd083fdf192c461685ad0b93cd1ccd0b2a8207f1185f078b
+    # via bef-redbird
 et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
@@ -136,6 +146,7 @@ numpy==2.5.4 \
     --hash=sha256:fbde6962867ee75b48b0ee29b2b9372ec5d617799dbaf38e82dc0596f2f7738a \
     --hash=sha256:fe4d21ab149f15e4e6043dfb0de87e6e5f34ac176cde83060e9802981fca2ac2
     # via
+    #   bef-redbird
     #   pandas
     #   pydeck
     #   streamlit
@@ -178,9 +189,9 @@ pillow==12.3.0 \
     --hash=sha256:e491916b378fba47242221bb9ead245211b70d504f495d105d17b14a24b4907c \
     --hash=sha256:ffd0c5368496f41b0944be820fcb7a838aa6e623d250b01acf2643939c3f99d7
     # via streamlit
-plotly==6.9.0 \
-    --hash=sha256:36bebe2f1bb13884774fe61689c329071446f6ce4a8927fb1f0d6fb24f581236 \
-    --hash=sha256:967ad33e8c704fed051800d11d985eb206a9c795c14206b30a6f463ed9c67d0d
+plotly==7.1.0 \
+    --hash=sha256:dbb7fa18afce40d0a8e80d1bf162eceb3faa0ce5a77fe741ad09a74cf78f53f3 \
+    --hash=sha256:f860166a4a3d78c69cb1f4a15f28a5c8283eade98a282a698f3bb853a449ace5
     # via bef-redbird
 protobuf==7.36.2 \
     --hash=sha256:497d0463ff3316681da6c0b9e8d06cb465d61abce00b613ab42226175644d1bb \
@@ -201,11 +212,25 @@ pyarrow==26.0.0 \
     --hash=sha256:954d971b363b16ee41f89389a4053315dc71265f2ce5c2468eb0a910b1166268 \
     --hash=sha256:cc903e1069e9dd5e9dcf780324c0112e27e051e422ecfaff574fb33ed65d9160 \
     --hash=sha256:ee341973f78a0b46e073d065e88e75026a9c584051e97f98a0d05d96c6bac7dd
-    # via streamlit
+    # via
+    #   bef-redbird
+    #   streamlit
 pydeck==0.9.3 \
     --hash=sha256:695775cbfe51f5fdffbd9735ba469987fdc5efc96bc40a0ee4808170509c78b2 \
     --hash=sha256:d8a47c11c81fb12d51b1feb42427ff4f0e13cb599e48931021b2cba98b6849a6
     # via streamlit
+pymupdf==1.28.2 \
+    --hash=sha256:2e1b574c0fd2cb238021033fd3c0f9c4388816638df064e4bfb56d9d81736dc8 \
+    --hash=sha256:3050a233dde1211efe89ada74e2add6238436434159f46097a1423aad2842545 \
+    --hash=sha256:397d6715c1f0df7548a92d0afd8ce370fc48fa47aeefac16be2bc04a16a8227f \
+    --hash=sha256:530ef543a3885b3b81cb72a854e7c5a625a9233201221132bb6c31698c6a2bdb \
+    --hash=sha256:5e0be7908a715aa20333caddd73f1d6f01e4cd0c26e869fa2dd0b7f344da2249 \
+    --hash=sha256:5fc315b425ff1f7afdd1ea2f348205cb19b806767daae7ce4d64115799c2bae1 \
+    --hash=sha256:7113846b35dbf0a033f088e4f4fb543dabeb4b0b12c112966a1ca1ee2d5eacae \
+    --hash=sha256:ebd244918798502d7b4504c90410d1711a4d7675a32584ca30f1bab419ecbffe \
+    --hash=sha256:f89fb2d86d07d643a269f17a093105057e20c79c1d06c103b53600067b6d2b01 \
+    --hash=sha256:ffe91a24edc75c80da2a4b62f50fc0f54632d34fc8fe4cbc48e5c7ff07cf8fb4
+    # via bef-redbird
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
@@ -271,6 +296,10 @@ starlette==1.8.0 \
 streamlit==1.66.0 \
     --hash=sha256:8b79761394664035ff5d691b4502b70385a39123e6d78a051c79e8ae28c29f8c \
     --hash=sha256:bae7c746f868c09431177df5ee7929839efe7d8fb2cedd553d2bb3c2e969822a
+    # via bef-redbird
+striprtf==0.0.33 \
+    --hash=sha256:c2d3d9ff3118df6dab558675f10a31ff8bb999ac1f8921f00c6dc9ea19961f18 \
+    --hash=sha256:f9637632a4414de05b1c399ee34d324dc336133ae45769992143a024e0f919ef
     # via bef-redbird
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 \

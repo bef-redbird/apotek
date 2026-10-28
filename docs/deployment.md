@@ -1,4 +1,49 @@
-# Private browser deployment
+# Local deployment
+
+`pharmacist_app.py` is the trained-model pharmacist workspace. The operator supplies
+a private JSON configuration outside Git with `root` (assessment storage),
+`protocol_root` (retained-model operation) and `market` (path/SHA-256/size pin of a
+prepared market index). The index binds causal features, supported history and any
+verified Cito/outcome evidence to explicit origin-to-target price transitions.
+
+Models, originals, prepared inputs and verified code pins are private prerequisites.
+A repository checkout alone does not contain them. Retained absolute pins must
+resolve to verified originals or separately verified recovery; do not rewrite frozen
+protocol identities to make a new location pass validation. The preserved local
+operator workspace retains acquisition, database maintenance and its own backup.
+The viewer never opens the operating database.
+
+From the repository root on Windows:
+
+```powershell
+.\scripts\Start-Pharmacist.ps1 -ConfigFile 'C:\Private\apotek\config.json'
+.\scripts\Start-Pharmacist.ps1 -ConfigFile 'C:\Private\apotek\config.json' -Stop
+.\scripts\Start-Pharmacist.ps1 -ConfigFile 'C:\Private\apotek\config.json' -Restart
+```
+
+The launcher installs the locked `inference` group in the private assessment root,
+including CatBoost, SciPy, psutil and threadpoolctl, and binds only
+`http://127.0.0.1:8530`. Duplicate launches reuse the verified process; startup errors
+identify private logs. Python's exact patch is pinned in `.python-version`. Keep the
+PC awake and the account signed in; Windows may be locked. No power settings,
+signed-out collection, online hosting or public port are configured.
+
+On another local operating system, install
+`uv sync --locked --no-dev --group inference`, set `REDBIRD_ASSESSMENT_CONFIG` to the
+private configuration, and run Streamlit with `--server.address 127.0.0.1` and
+`--server.port 8530`. The base requirements export below omits inference dependencies.
+
+Explicit analysis submission starts a serialized local worker. Durable status
+supports reconnect/retry; identical requests reuse verified work and changed context
+gets a separate identity. Failure preserves the last successful assessment. Notes
+bind to assessment/package. PDF exports verify saved values without inference.
+No training, automatic promotion, ordering or remote AI service is invoked.
+
+## Earlier workbook baseline
+
+The remaining sections describe the separate `app.py` baseline and its earlier
+hosting proposal. They are not the trained-model workspace's deployment procedure;
+remote operation remains outside this local delivery.
 
 The same Streamlit process serves local and hosted use. There is no separate API,
 database service, custom authentication or runtime AI dependency. Do not deploy
