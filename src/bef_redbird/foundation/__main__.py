@@ -88,6 +88,12 @@ def main(argv: list[str] | None = None) -> int:
     issues.add_argument(
         "--output", type=Path, help="New external JSON file; never writes source files"
     )
+    select = commands.add_parser("select", help="Freeze explicit verified F3 evidence")
+    select.add_argument("--config", required=True, type=Path, help="External selection JSON")
+    select.add_argument("--output", type=Path, help="New private detailed selection JSON")
+    selection = commands.add_parser("selection", help="Inspect a frozen F3 selection")
+    selection.add_argument("selection_id")
+    selection.add_argument("--output", type=Path, help="New private detailed selection JSON")
     backup = commands.add_parser("backup", help="Copy a closed store before opening/migrating it")
     backup.add_argument("destination", type=Path)
     restore = commands.add_parser("restore", help="Restore verified backup to new database/archive")
@@ -104,9 +110,9 @@ def main(argv: list[str] | None = None) -> int:
             print("Cold storage copy verified.")
             return 0
         if args.command == "adapters":
-            from .ingestion import VERSIONS
+            from .ingestion import SUPPORTED_VERSIONS
 
-            print(json.dumps(VERSIONS, sort_keys=True))
+            print(json.dumps(SUPPORTED_VERSIONS, sort_keys=True))
             return 0
         with Store(args.database, args.archive) as store:
             if args.command == "init":
@@ -118,6 +124,20 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "period":
                 store.add_period(args.start, args.end_exclusive)
                 print("Calendar period registered.")
+            elif args.command in {"select", "selection"}:
+                from .selection import selection_summary
+
+                selected = (
+                    store.create_selection(
+                        json.loads(external_path(args.config).read_text(encoding="utf-8"))
+                    )
+                    if args.command == "select"
+                    else store.inspect_selection(args.selection_id)
+                )
+                if args.output is not None:
+                    with external_path(args.output).open("x", encoding="utf-8") as output:
+                        json.dump(selected, output, indent=2, ensure_ascii=False)
+                print(json.dumps(selection_summary(selected), sort_keys=True))
             elif args.command in {"summary", "issues"}:
                 result = store.import_summary(args.import_id)
                 if args.command == "issues" and args.output is not None:
@@ -150,7 +170,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 print(json.dumps(result, sort_keys=True))
                 return int(result["validation_status"] != "accepted")
-    except (FoundationError, duckdb.Error, OSError, ValueError, TypeError, AttributeError):
+    except (
+        FoundationError,
+        duckdb.Error,
+        OSError,
+        ValueError,
+        TypeError,
+        AttributeError,
+        KeyError,
+    ):
         # DB/OS exceptions can contain private values and absolute source paths.
         print(
             "Foundation operation failed; inspect storage and supplied metadata locally.",

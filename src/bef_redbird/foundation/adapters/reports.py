@@ -29,6 +29,7 @@ from bef_redbird.imports import (
 )
 
 from .base import AdapterError, Assertion, Parsed, Problem, field_state
+from .report_basis import BASIS_OVERRIDE_KEY, validated_basis_override, with_basis_override
 from .workbooks import (
     _PACKAGE_FIELDS,
     _at,
@@ -212,7 +213,9 @@ def _date_value(value: Any) -> date:
     raise ValueError("invalid_date")
 
 
-def _metadata(grid: _Grid, family: str, current: date | None) -> dict[str, Any]:
+def _metadata(
+    grid: _Grid, family: str, current: date | None, *, archive_layout: bool = False
+) -> dict[str, Any]:
     title = _at(grid.rows[0], 0)
     titles = ("Prisændringer",) if family == "changes" else _INTRO_TITLES
     if title.kind in ("f", "e") or title.value not in titles:
@@ -221,6 +224,21 @@ def _metadata(grid: _Grid, family: str, current: date | None) -> dict[str, Any]:
     # row 2 G/H/I/J and optional row 3 M (introductions).
     tariff_positions = [(1, 4), (1, 5)] if family == "changes" else [(2, c) for c in (6, 7, 8, 9)]
     run_positions = [(1, 11)] if family == "changes" else [(3, 12)]
+    if archive_layout and family == "introductions":
+        tariff_positions = [(2, c) for c in range(4, 12)]
+        run_positions = [(3, 12), (3, 13), (4, 12)]
+        for rowno, row in enumerate(grid.rows[:4], 1):
+            for col, cell in enumerate(row):
+                if isinstance(cell.value, str) and re.match(
+                    r"(?:Takstdato|Kørselsdato)\s*:", cell.value
+                ):
+                    allowed = (
+                        tariff_positions if cell.value.startswith("Takstdato") else run_positions
+                    )
+                    if (rowno, col) not in allowed:
+                        raise AdapterError(
+                            "unsupported_report_metadata_position", _locator(grid.name, rowno, col)
+                        )
     metadata: dict[str, Any] = {"report_title": title.value}
     for key, label, positions, required in (
         ("tariff_date", "Takstdato", tariff_positions, True),
@@ -420,6 +438,15 @@ def parse_price_changes(data: bytes, context: dict[str, Any]) -> Parsed:
 
 def parse_introductions(data: bytes, context: dict[str, Any]) -> Parsed:
     """Read either evidenced formulation title and the row-5/6 header variants."""
+    return _parse_introductions(data, context, archive_layout=False)
+
+
+def parse_introductions_v2(data: bytes, context: dict[str, Any]) -> Parsed:
+    """Retain the observed archive metadata positions, including run-date variants."""
+    return _parse_introductions(data, context, archive_layout=True)
+
+
+def _parse_introductions(data: bytes, context: dict[str, Any], *, archive_layout: bool) -> Parsed:
     if not data.startswith(b"PK"):
         raise AdapterError("unsupported_source_format")
     current = _context_period(context, "current_period", required=True)
@@ -442,7 +469,7 @@ def parse_introductions(data: bytes, context: dict[str, Any]) -> Parsed:
     if len(candidates) != 1:
         raise AdapterError("ambiguous_report_sheet" if candidates else "unsupported_schema")
     grid, header_row = candidates[0]
-    metadata = _metadata(grid, "introductions", current)
+    metadata = _metadata(grid, "introductions", current, archive_layout=archive_layout)
     parsed = Parsed()
     for number, row, original, canonical, raw in _records(grid, header_row, 5, parsed):
         raw = {**raw, **metadata}
@@ -519,12 +546,64 @@ def _dated_field(
 
 def parse_discontinued(data: bytes, context: dict[str, Any]) -> Parsed:
     """Keep independent source-reported stop and permanent-deletion dates."""
+    return _parse_discontinued(data, context, archive_layout=False)
+
+
+def parse_discontinued_v2(data: bytes, context: dict[str, Any]) -> Parsed:
+    """Also read the explicit row-2 header variant; its A1 date has unknown meaning."""
+    return _parse_discontinued(data, context, archive_layout=True)
+
+
+def _parse_discontinued(data: bytes, context: dict[str, Any], *, archive_layout: bool) -> Parsed:
     if not data.startswith(b"PK"):
         raise AdapterError("unsupported_source_format")
     current = _context_period(context, "current_period")
-    grid, header = _select(data, _STOP, (1,))
+    if not archive_layout:
+        grid, header = _select(data, _STOP, (1,))
+    else:
+        alternate = (
+            "Repræsentant",
+            "Lægemiddel",
+            "Lægemiddelform",
+            "Styrke",
+            "Varenummer",
+            "RPk",
+            "Stop (deaktiveret)",
+            "Slet (udgår permanent)",
+        )
+        candidates = []
+        for candidate in _grids(data):
+            for number, expected in ((1, _STOP), (2, alternate)):
+                if number > len(candidate.rows):
+                    continue
+                row = candidate.rows[number - 1]
+                headings = tuple(_heading(cell.value) for cell in row)
+                if (
+                    headings[: len(expected)] == expected
+                    and not any(headings[len(expected) :])
+                    and not any(cell.kind in ("f", "e") for cell in row)
+                ):
+                    candidates.append((candidate, number))
+        if len(candidates) != 1:
+            raise AdapterError("ambiguous_report_sheet" if candidates else "unsupported_schema")
+        grid, header = candidates[0]
+    if header == 2:
+        if _at(grid.rows[0], 0).kind in ("f", "e"):
+            raise AdapterError("invalid_report_metadata")
+        try:
+            _date_value(_at(grid.rows[0], 0).value)
+        except ValueError as error:
+            raise AdapterError("invalid_report_metadata") from error
+        if current is not None:
+            raise AdapterError("unestablished_report_period")
     parsed = Parsed()
     for number, row, original, canonical, raw in _records(grid, header, 4, parsed):
+        if header == 2:
+            raw.update(
+                unlabelled_date=_raw(_at(grid.rows[0], 0).value),
+                unlabelled_date_locator=_locator(grid.name, 1, 0),
+                unlabelled_date_semantics="unknown",
+            )
         _attributes(
             parsed,
             grid,
@@ -575,7 +654,7 @@ def parse_discontinued(data: bytes, context: dict[str, Any]) -> Parsed:
                     original,
                     {
                         "event_type": event,
-                        "original_source_code": grid.rows[0][col].value,
+                        "original_source_code": grid.rows[header - 1][col].value,
                         "interpretation_status": "unknown",
                     },
                     {"effective_date": state},
@@ -734,3 +813,17 @@ def parse_supply(data: bytes, context: dict[str, Any]) -> Parsed:
                 )
             )
     return parsed
+
+
+def parse_price_changes_v2(data: bytes, context: dict[str, Any]) -> Parsed:
+    """Opt in to reviewed, bounded current-AIP basis evidence; old quotes stay unknown."""
+    profile = validated_basis_override(context)
+    base = {key: value for key, value in context.items() if key != BASIS_OVERRIDE_KEY}
+    return with_basis_override(parse_price_changes(data, base), profile)
+
+
+def parse_introductions_v3(data: bytes, context: dict[str, Any]) -> Parsed:
+    """Retain archive-layout v2 with an explicit bounded current-AIP interpretation."""
+    profile = validated_basis_override(context)
+    base = {key: value for key, value in context.items() if key != BASIS_OVERRIDE_KEY}
+    return with_basis_override(parse_introductions_v2(data, base), profile)

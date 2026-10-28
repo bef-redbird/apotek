@@ -16,7 +16,16 @@ repos:
     rev: 68e8b45440415753fff70a312ece8da92ba85b4a  # pragma: allowlist secret
     hooks:
       - id: detect-secrets
-        args: [--no-verify]
+        args:
+          - --no-verify
+          # Exact historical auditor fingerprints, independently byte-verified.
+          # Match whole declarations only; other values/keys remain inspected.
+          - --exclude-lines
+          - '^\s*"source_audit\.py": "a8e3270cec0c609d018cd7a2f64856f7e444f797edf9a54ba73885179dcbed21",\s*$' # pragma: allowlist secret
+          - --exclude-lines
+          - '^\s*"rtf_audit\.py": "45f3634a1a337fbbd62272ca0efe854a2bf7dddc1798d63773c318e3f264c8da",\s*$' # pragma: allowlist secret
+          - --exclude-lines
+          - '^\s*"pdf_audit\.py": "23c126b18b86df016dc325b79cacb8e7a9c8a7f9c7642f4905d7a3667b74ddcf",\s*$' # pragma: allowlist secret
         # Dependency integrity hashes are reviewed lock artifacts, not credentials.
         exclude: ^(uv\.lock|requirements\.txt)$
   - repo: https://github.com/astral-sh/ruff-pre-commit

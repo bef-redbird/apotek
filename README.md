@@ -3,10 +3,10 @@
 A pharmacist's workspace for investigating dated medicine-market evidence,
 reviewing procurement opportunities and eventually measuring decision outcomes.
 
-The first local data-foundation slice (F1) provides immutable source archiving,
-one persistent DuckDB database and reference/provenance records. Source adapters,
-market observations and reproducible analyses tied to a decision cutoff remain
-later slices. The final product platform and hosting are open decisions.
+The local data foundation provides immutable source archiving, a persistent
+DuckDB database, typed workbook ingestion and reproducible observation selection
+with explicit identity, reconciliation and decision cutoffs (F1–F3).
+The final product platform and hosting are open decisions.
 
 ## Direction and status
 
@@ -16,6 +16,13 @@ later slices. The final product platform and hosting are open decisions.
 | [Data foundation](docs/data-foundation.md) | Defines records, provenance, time, revisions and acceptance |
 | [Development progress](docs/progress.md) | Tracks implemented work, dependencies and the next slice |
 | [Development and delivery](docs/development.md) | Defines engineering checks and delivery safeguards |
+| [F3 selection guide](docs/f3-selection.md) | Explains selection commands, evidence, revisions and operating limits |
+| [E1 research guide](docs/e1-research.md) | Explains structured-source admission, frozen evaluation and the separate saved-results dashboard |
+| [E2 research guide](docs/e2-research.md) | Defines dated substitution peers, bounded model comparisons and saved-result replay |
+| [E3 research guide](docs/e3-research.md) | Defines advance-ABC proxy experiments, fall-aware queues, amount uncertainty and supported different-size peers |
+| [E4 research guide](docs/e4-research.md) | Defines immutable assessments, separate outcomes and inventory scenarios |
+| [E5 research guide](docs/e5-research.md) | Defines dated eligibility, freshness, tuning, monetary forecasts, persistence and financial rankings |
+| [Training-data guide](docs/training-data.md) | Defines full-history export, typed features/labels, bounded reading and CatBoost inputs without fitting |
 
 Older handovers and temporary-session-only plans do not govern new development.
 The existing app is a working baseline, with its implemented behaviour documented
@@ -49,8 +56,26 @@ Open the local URL printed by Streamlit. Python 3.12 is selected by
 These commands do not establish a hosted instance or verified access controls.
 
 The separate [local foundation entry point](docs/development.md#local-foundation-f1)
-initializes private storage and registers original bytes. It does not change the
+initializes private storage and registers original bytes.
+[F3 selections](docs/f3-selection.md) require explicit imports, mappings, scope,
+cutoff and independently reconciled evidence. The foundation does not change the
 Streamlit workflow or persist its uploads and reviews.
+
+The separate research dashboard displays explicitly selected, verified results:
+
+```text
+uv run streamlit run research_dashboard.py --server.address 127.0.0.1 --server.port 8503 -- <path-to-E1-run.json>
+uv run streamlit run research_dashboard.py --server.address 127.0.0.1 --server.port 8513 -- --e2 <path-to-E2-result.json>
+uv run streamlit run research_dashboard.py --server.address 127.0.0.1 --server.port 8514 -- --e3 <path-to-E3-index.json>
+uv run streamlit run research_dashboard.py --server.address 127.0.0.1 --server.port 8515 -- --e4 <path-to-E4-index.json>
+uv run streamlit run research_dashboard.py --server.address 127.0.0.1 --server.port 8516 -- --e5 <path-to-E5-index.json>
+```
+
+It reads saved artifacts only. It does not query the live foundation, fit models
+or alter the existing application's reviews. See the
+[E1 guide](docs/e1-research.md#saved-results-dashboard) and
+[E2 guide](docs/e2-research.md) and [E3 guide](docs/e3-research.md) for their distinct datasets, exposure and comparison
+boundaries. Explicit loopback binding keeps both dashboards local to this computer.
 
 ## Review a report
 
@@ -76,10 +101,20 @@ Excel is a review artifact, not a source-history backup.
 
 ## Current limits
 
-No durable database, historical-file ingestion pipeline, trained predictive model,
-automatic ordering, quantity optimisation or realised-profit evaluation is
-implemented. See [progress](docs/progress.md) for the approved development sequence.
+Foundation selections are local evidence artifacts. Source schema support and
+private historical availability remain bounded; accepted imports alone do not
+establish analytical eligibility. Trained predictive models, automatic ordering,
+quantity optimisation and realised-profit evaluation are not implemented.
+See [progress](docs/progress.md) for verified status and remaining dependencies.
 
 Keep original files, databases, derived business data and review copies in
 approved private storage outside Git. Private-file checks are opt-in; default
 tests use synthetic data. Software checks do not establish commercial benefit.
+# Local pharmacist MVP
+
+The trained-model workspace starts with `scripts/Start-Pharmacist.ps1 -ConfigFile
+<private-config.json>`. It supports prepared market data, Cito-only upload,
+same-target with/without-Cito review, the last two historical top-50 lists,
+assessment-bound notes and PDF export. See [local operation](docs/deployment.md).
+Private models, sources, configurations and results are installed by the operator
+outside Git. This is a loopback-only diagnostic research tool, not an ordering system.

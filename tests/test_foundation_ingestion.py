@@ -398,7 +398,9 @@ def test_f1_cold_backup_restore_and_upgrade_preserve_originals(tmp_path, monkeyp
                 "SELECT count(*) FROM schema_migration"
             ).fetchone() == (1,)
     with Store(restored, restored_archive) as store:
-        assert store._connection.execute("SELECT count(*) FROM schema_migration").fetchone() == (2,)
+        assert store._connection.execute("SELECT count(*) FROM schema_migration").fetchone() == (
+            len(migrations.MIGRATIONS),
+        )
         assert str(store.get_record("package", package)["package_id"]) == package
         assert store.get_record("import_batch", batch)["parser_version"] == "f1"
         result = ingest(store, delivery)

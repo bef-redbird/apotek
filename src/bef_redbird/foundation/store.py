@@ -135,6 +135,43 @@ class Store:
             f"INSERT INTO {table} ({columns}) VALUES ({parameters})", list(record.values())
         )
 
+    def _insert_many(
+        self, table: str, records: list[dict[str, Any]], *, existing_ok: bool = False
+    ) -> None:
+        """Bounded vector insertion inside the caller's publication transaction.
+
+        Object dtype is essential: nullable integer money must never pass through
+        a float64 dataframe column. DuckDB still enforces every scalar/FK constraint.
+        """
+        import pandas as pd
+
+        self._check_owner()
+        if not self._depth:
+            raise FoundationError("Bulk insertion requires a publication transaction")
+        for offset in range(0, len(records), 4096):
+            batch = records[offset : offset + 4096]
+            columns = list(batch[0])
+            if any(list(record) != columns for record in batch):
+                raise FoundationError("Bulk records have inconsistent columns")
+            frame = pd.DataFrame(batch, dtype=object)
+            if table == "price_observation":
+                # DuckDB samples object columns. Early small values otherwise
+                # infer INTEGER and reject a valid later BIGINT. An explicit
+                # nullable extension dtype keeps the complete signed-64 range.
+                frame["amount_ore"] = pd.array(
+                    [record["amount_ore"] for record in batch], dtype="Int64"
+                )
+            self._connection.register("_foundation_publication", frame)
+            try:
+                names = ", ".join(columns)
+                conflict = " ON CONFLICT DO NOTHING" if existing_ok else ""
+                self._connection.execute(
+                    f"INSERT INTO {table} ({names}) SELECT {names} "
+                    f"FROM _foundation_publication{conflict}"
+                )
+            finally:
+                self._connection.unregister("_foundation_publication")
+
     def _exists(self, table: str, key: str) -> bool:
         return (
             self._connection.execute(
@@ -541,3 +578,15 @@ class Store:
         )
         columns = [column[0] for column in result.description]
         return [dict(zip(columns, row, strict=True)) for row in result.fetchall()]
+
+    def create_selection(self, configuration: dict[str, Any]) -> dict[str, Any]:
+        """Freeze explicitly reconciled, scoped evidence under a versioned policy."""
+        from .selection import create_selection
+
+        return create_selection(self, configuration)
+
+    def inspect_selection(self, selection_id: str) -> dict[str, Any]:
+        """Read the immutable artifact and verify its hashes and archived evidence."""
+        from .selection import inspect_selection
+
+        return inspect_selection(self, selection_id)

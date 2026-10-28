@@ -8,6 +8,7 @@ here without selecting a preferred duplicate or backdating current attributes.
 from __future__ import annotations
 
 import io
+import re
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -36,6 +37,7 @@ from .base import AdapterError, Assertion, Parsed, Problem, field_state, identif
 
 CITO_VERSION = "cito-workbook-v1"
 HISTORY_VERSION = "lms-history-workbook-v1"
+HISTORY_SUBSET_VERSION = "lms-history-workbook-v2"
 _PACKAGE_FIELDS = ("name", "form", "strength", "pack_description", "company", "storage_code", "atc")
 _HISTORY_FIELDS = {
     "lægemiddel": "name",
@@ -88,6 +90,8 @@ def _context_period(context: dict[str, Any], key: str, *, required: bool = False
 
 
 def _price_context(context: dict[str, Any], *, cito: bool) -> dict[str, Any]:
+    if "price_basis_override" in context:
+        raise AdapterError("price_basis_override_requires_versioned_report_reader")
     required: tuple[str, ...] = ("tax_basis", "fee_basis")
     if cito:
         required += ("price_type", "currency", "price_basis")
@@ -387,7 +391,40 @@ def parse_cito(data: bytes, context: dict[str, Any]) -> Parsed:
         raise AdapterError("invalid_cito_workbook") from exc
 
 
-def parse_history(data: bytes, context: dict[str, Any]) -> Parsed:
+def parse_history_subset(data: bytes, context: dict[str, Any]) -> Parsed:
+    """Explicit bounded extract retaining original coordinates and untouched bytes.
+
+    The publication boundary also requires matching partial-extract coverage.
+    V1 has no subset interpretation and retains its existing complete row reader.
+    """
+    identifiers = context.get("subset_identifiers")
+    periods = context.get("subset_periods")
+    if (
+        not isinstance(identifiers, list)
+        or not 1 <= len(identifiers) <= 5
+        or any(not isinstance(v, str) or not re.fullmatch(r"[0-9]{6}", v) for v in identifiers)
+        or len(set(identifiers)) != len(identifiers)
+    ):
+        raise AdapterError("invalid_history_subset_identifiers")
+    if not isinstance(periods, list) or not 1 <= len(periods) <= 2:
+        raise AdapterError("invalid_history_subset_periods")
+    try:
+        selected_periods = {
+            _context_period({"period": value}, "period", required=True) for value in periods
+        }
+    except AdapterError as exc:
+        raise AdapterError("invalid_history_subset_periods") from exc
+    if len(selected_periods) != len(periods):
+        raise AdapterError("invalid_history_subset_periods")
+    return parse_history(data, context, _subset=(set(identifiers), selected_periods))
+
+
+def parse_history(
+    data: bytes,
+    context: dict[str, Any],
+    *,
+    _subset: tuple[set[str], set[date | None]] | None = None,
+) -> Parsed:
     """Read exact-AIP rows and date columns without merging duplicate assertions."""
     current = _context_period(context, "current_period")
     price_context = _price_context(context, cito=False)
@@ -412,6 +449,10 @@ def parse_history(data: bytes, context: dict[str, Any]) -> Parsed:
         for col in range(min(dates.values()), max(dates.values()) + 1):
             if col not in dates.values() and normal_header(headers[col]) not in known:
                 raise AdapterError("unknown_history_date_heading")
+        if _subset is not None:
+            if not _subset[1] <= dates.keys():
+                raise AdapterError("missing_history_subset_period")
+            dates = {period: col for period, col in dates.items() if period in _subset[1]}
         attributes: dict[str, int] = {}
         for heading, field in _HISTORY_FIELDS.items():
             matches = [col for col, value in enumerate(headers) if normal_header(value) == heading]
@@ -424,6 +465,14 @@ def parse_history(data: bytes, context: dict[str, Any]) -> Parsed:
                     )
                 )
         for rowno, row in rows:
+            if _subset is not None:
+                selected_id_cell = _at(row, mapping["varenummer"])
+                try:
+                    selected_id = identifier(selected_id_cell.value)
+                except ValueError:
+                    continue
+                if selected_id not in _subset[0]:
+                    continue
             indicator = _at(row, mapping["indikator"])
             if indicator.kind in ("f", "e"):
                 parsed.issues.append(

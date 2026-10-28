@@ -58,14 +58,44 @@ VERSIONS = {
     "introductions": "introductions-workbook-v1",
     "discontinued": "discontinued-workbook-v1",
     "supply": "supply-workbook-v1",
+    "medicine-prices": "medicine-prices-pdf-v1",
+    "lms-ftp": "lms-ftp-zip-v1",
 }
+SUPPORTED_VERSIONS = {adapter: [version] for adapter, version in VERSIONS.items()}
+SUPPORTED_VERSIONS["lms-history"].append("lms-history-workbook-v2")
+SUPPORTED_VERSIONS["introductions"].append("introductions-workbook-v2")
+SUPPORTED_VERSIONS["discontinued"].append("discontinued-workbook-v2")
+SUPPORTED_VERSIONS["price-changes"].append("price-changes-workbook-v2")
+SUPPORTED_VERSIONS["introductions"].append("introductions-workbook-v3")
+for _rtf_adapter in ("price-changes", "introductions", "discontinued"):
+    SUPPORTED_VERSIONS[_rtf_adapter].append(f"{_rtf_adapter}-rtf-v1")
 
 
 def adapter_reader(adapter: str, version: str) -> Callable[[bytes, dict[str, Any]], Parsed]:
-    from .adapters import reports, workbooks
+    from .adapters import lms_ftp, medicine_pdf, reports, rtf_reports, workbooks
 
-    if VERSIONS.get(adapter) != version:
+    if version != VERSIONS.get(adapter) and version not in SUPPORTED_VERSIONS.get(adapter, []):
         raise ValueError("Unsupported adapter/version")
+    if adapter == "medicine-prices":
+        return medicine_pdf.parse_medicine_pdf
+    if adapter == "lms-ftp":
+        return lms_ftp.parse_lms_ftp
+    if version == f"{adapter}-rtf-v1":
+        return {
+            "price-changes": rtf_reports.parse_changes,
+            "introductions": rtf_reports.parse_introductions,
+            "discontinued": rtf_reports.parse_discontinued,
+        }[adapter]
+    if adapter == "lms-history" and version == "lms-history-workbook-v2":
+        return workbooks.parse_history_subset
+    if adapter == "price-changes" and version == "price-changes-workbook-v2":
+        return reports.parse_price_changes_v2
+    if adapter == "introductions" and version == "introductions-workbook-v3":
+        return reports.parse_introductions_v3
+    if adapter == "introductions" and version == "introductions-workbook-v2":
+        return reports.parse_introductions_v2
+    if adapter == "discontinued" and version == "discontinued-workbook-v2":
+        return reports.parse_discontinued_v2
     return {
         "cito": workbooks.parse_cito,
         "lms-history": workbooks.parse_history,
@@ -194,12 +224,12 @@ def _conflicts(parsed: Parsed) -> None:
             parsed.assertions[index] = replace(item, presence=presence, quality_state="conflicting")
 
 
-def _validate_assertion(item: Assertion) -> None:
+def _validate_assertion(item: Assertion) -> str:
     if item.table not in TABLE_FIELDS or item.values.keys() - set(TABLE_FIELDS[item.table]):
         raise FoundationError("Adapter produced unsupported business fields")
     required(item.source_locator)
     identifier(item.source_identifier)
-    canonical_json(item.raw)
+    raw_json = canonical_json(item.raw)
     if set(item.presence.values()) - STATES:
         raise FoundationError("Adapter produced unsupported presence state")
     for value in (item.effective_date, item.effective_period, item.report_period):
@@ -215,6 +245,7 @@ def _validate_assertion(item: Assertion) -> None:
             raise FoundationError("Adapter produced invalid exact money")
         if item.values.get("price_role") == "reported_previous_price" and item.effective_period:
             raise FoundationError("Quoted previous price cannot invent an effective period")
+    return raw_json
 
 
 def _publish(
@@ -224,6 +255,9 @@ def _publish(
     assertion: Assertion,
     package_id: str,
     mapping_id: str,
+    buffer: dict[str, list[dict[str, Any]]] | None = None,
+    *,
+    raw_json: str | None = None,
 ) -> None:
     fields = TABLE_FIELDS[assertion.table]
     presence = {
@@ -254,14 +288,94 @@ def _publish(
         "effective_date": _serial(assertion.effective_date),
         "quality_state": quality,
         "field_presence": canonical_json(presence),
-        "source_values": canonical_json(assertion.raw),
+        "source_values": canonical_json(assertion.raw) if raw_json is None else raw_json,
         **{key: _serial(assertion.values.get(key)) for key in fields},
     }
     observation_id = identity("observation", {"table": assertion.table, **record})
-    store._insert(assertion.table, {"observation_id": observation_id, **record})
+    complete_record = {"observation_id": observation_id, **record}
+    if buffer is None:
+        store._insert(assertion.table, complete_record)
+    else:
+        buffer[assertion.table].append(complete_record)
 
 
-def _issue(store: Store, import_id: str, issue: Problem, periods: set[date]) -> None:
+def _delivery_mappings(
+    store: Store,
+    import_id: str,
+    delivery_id: str,
+    mapping_version: str,
+    assertions: list[Assertion],
+    periods: set[date],
+) -> dict[str, tuple[str, str]]:
+    """Create the same delivery-scoped identities in one constrained transaction."""
+    from .store import UNKNOWN_TIMING
+
+    first: dict[str, str] = {}
+    for item in assertions:
+        if any(
+            p is not None and p not in periods for p in (item.effective_period, item.report_period)
+        ):
+            continue
+        first.setdefault(identifier(item.source_identifier), item.source_locator)
+    scope = f"delivery:{delivery_id}"
+    existing = store._connection.execute(
+        """SELECT m.canonical_value, m.package_id FROM package_identifier m
+        JOIN import_batch i ON i.import_id=m.evidence_import_id
+        WHERE m.namespace='dk:varenummer' AND m.mapping_version=?
+        AND m.validity_kind='scope' AND m.scope_key=?
+        AND i.validation_status IN ('running', 'accepted')""",
+        [mapping_version, scope],
+    ).fetchall()
+    packages = []
+    mappings = []
+    resolved = {}
+    for canonical, locator in first.items():
+        package_id = identity(
+            "source-package",
+            {
+                "delivery_id": delivery_id,
+                "namespace": "dk:varenummer",
+                "identifier": canonical,
+            },
+        )
+        record = {
+            "package_id": package_id,
+            "namespace": "dk:varenummer",
+            "identifier_value": canonical,
+            "canonical_value": canonical,
+            "validity_kind": "scope",
+            "valid_from": None,
+            "valid_to": None,
+            "scope_key": scope,
+            "evidence_import_id": import_id,
+            "source_locator": locator,
+            "mapping_version": required(mapping_version),
+        }
+        mapping_id = identity("mapping", {**record, "available": UNKNOWN_TIMING.metadata()})
+        packages.append({"package_id": package_id})
+        mappings.append(
+            {
+                "mapping_id": mapping_id,
+                **record,
+                **store._timing_columns("available", UNKNOWN_TIMING.values()),
+            }
+        )
+        resolved[canonical] = package_id, mapping_id
+    for canonical, old_package in existing:
+        if canonical in resolved and str(old_package) != resolved[canonical][0]:
+            raise ValueError("Ambiguous overlapping identifier mapping")
+    store._insert_many("package", packages, existing_ok=True)
+    store._insert_many("package_identifier", mappings, existing_ok=True)
+    return resolved
+
+
+def _issue(
+    store: Store,
+    import_id: str,
+    issue: Problem,
+    periods: set[date],
+    buffer: dict[str, dict[str, Any]] | None = None,
+) -> None:
     # Unknown calendar slots cannot be fabricated to satisfy an issue's foreign key.
     scope = issue.blocking_scope
     period = issue.period if issue.period in periods else None
@@ -273,16 +387,79 @@ def _issue(store: Store, import_id: str, issue: Problem, periods: set[date]) -> 
             affected_identifier = identifier(affected_identifier)
         except ValueError:
             pass  # Invalid source identifiers remain actionable through their locator.
-    store.add_issue(
-        import_id,
-        source_locator=issue.source_locator,
-        code=issue.code,
-        blocking_scope=scope,
-        severity=issue.severity,
-        identifier=affected_identifier,
-        field=issue.field or ("effective_period" if scope == "field" else None),
-        period=period,
-    )
+    field = issue.field or ("effective_period" if scope == "field" else None)
+    if buffer is None:
+        store.add_issue(
+            import_id,
+            source_locator=issue.source_locator,
+            code=issue.code,
+            blocking_scope=scope,
+            severity=issue.severity,
+            identifier=affected_identifier,
+            field=field,
+            period=period,
+        )
+    else:
+        record = {
+            "import_id": str(UUID(import_id)),
+            "source_locator": required(issue.source_locator),
+            "code": required(issue.code),
+            "severity": issue.severity,
+            "blocking_scope": scope,
+            "identifier": required(affected_identifier)
+            if affected_identifier is not None
+            else None,
+            "field": required(field) if field is not None else None,
+            "period": period.isoformat() if period else None,
+        }
+        issue_id = identity("issue", record)
+        buffer[issue_id] = {"issue_id": issue_id, **record}
+
+
+def _validate_lms_delivery(store: Store, delivery: dict[str, Any], context: dict[str, Any]) -> None:
+    """ZIP controls cannot establish trusted release phase or source population."""
+    from .adapters.report_basis import validated_basis_override
+
+    if delivery["phase"] != "final":
+        raise AdapterError("unsupported_lms_release_phase", "manifest:phase")
+    if not delivery["edition"] or delivery["target_period"] is not None:
+        raise AdapterError("invalid_lms_release_binding", "manifest:delivery")
+    calendar = store._connection.execute(
+        "SELECT period_end_exclusive FROM price_period WHERE period_start = ?",
+        [delivery["current_period"]],
+    ).fetchone()
+    if calendar is None or calendar[0].isoformat() != context.get("period_end_exclusive"):
+        raise AdapterError("lms_calendar_interval_conflict", "manifest:context")
+    coverage = json.loads(delivery["coverage"])
+    expected_fields = {
+        "aip",
+        "registered",
+        "consumer",
+        "reimbursement_basis",
+        "abc_code",
+        "group_code",
+    }
+    fields = coverage.get("fields")
+    if (
+        coverage.get("kind") not in ("partial_extract", "complete_snapshot")
+        or coverage.get("family") != "lms-ftp"
+        or coverage.get("population") != "lms02-package-set"
+        or not isinstance(fields, list)
+        or any(not isinstance(field, str) for field in fields)
+        or len(fields) != len(expected_fields)
+        or set(fields) != expected_fields
+        or coverage.get("filter")
+    ):
+        raise AdapterError("lms_explicit_coverage_required", "manifest:coverage")
+    if "price_basis_override" in context:
+        profile = validated_basis_override(context)
+        try:
+            evidence = store.get_record("source_delivery", profile["evidence_delivery_id"])
+        except (ValueError, KeyError) as exc:
+            raise AdapterError("lms_basis_evidence_missing", "manifest:context") from exc
+        if evidence["content_hash"] != profile["evidence_sha256"]:
+            raise AdapterError("lms_basis_evidence_hash_conflict", "manifest:context")
+        store.original_path(str(evidence["delivery_id"]))
 
 
 def ingest(
@@ -302,6 +479,14 @@ def ingest(
     reader = adapter_reader(adapter, version)
     delivery = store.get_record("source_delivery", delivery_id)
     delivery_id = str(delivery["delivery_id"])
+    if adapter == "lms-history" and version == "lms-history-workbook-v2":
+        coverage = json.loads(delivery["coverage"])
+        expected_filter = {
+            "subset_identifiers": context.get("subset_identifiers"),
+            "subset_periods": context.get("subset_periods"),
+        }
+        if coverage.get("kind") != "partial_extract" or coverage.get("filter") != expected_filter:
+            raise ValueError("Bounded history requires matching explicit partial-extract coverage")
     if mapping_policy not in {"existing", "delivery"}:
         raise ValueError("Unsupported mapping policy")
     if mapping_policy == "delivery" and mapping_scope is not None:
@@ -311,6 +496,12 @@ def ingest(
         if mapping_scope != f"delivery:{delivery_id}":
             raise ValueError("Delivery-scoped mapping cannot be reused for a different delivery")
     canonical_json(context)
+    if "price_basis_override" in context and version not in {
+        "price-changes-workbook-v2",
+        "introductions-workbook-v3",
+        "lms-ftp-zip-v1",
+    }:
+        raise ValueError("Price basis override requires an explicit supported report version")
     # Trusted delivery context cannot be overwritten through an adapter option.
     if set(context) & {"current_period", "target_period"}:
         raise ValueError("Report periods belong to the delivery metadata")
@@ -345,14 +536,18 @@ def ingest(
             raise AdapterError("source_resource_limit")
         data = store.original_path(delivery_id).read_bytes()
         parsed = reader(data, effective_context)
+        if adapter == "lms-ftp":
+            _validate_lms_delivery(store, delivery, effective_context)
     except AdapterError as exc:
         parsed = Parsed(issues=[Problem(exc.source_locator, exc.code, blocking_scope="import")])
     periods = {
         row[0]
         for row in store._connection.execute("SELECT period_start FROM price_period").fetchall()
     }
-    for item in parsed.assertions:
-        _validate_assertion(item)
+    # Validation serializes every raw fragment. Reuse those exact bytes during
+    # publication instead of walking/encoding large PDF/RTF provenance twice.
+    # Conflict detection changes presence/quality only, never raw fragments.
+    raw_fragments = [_validate_assertion(item) for item in parsed.assertions]
     _conflicts(parsed)
     coverage = json.loads(delivery["coverage"])
     if coverage.get("family") not in (None, adapter):
@@ -379,16 +574,28 @@ def ingest(
             Problem("manifest:coverage", "declared_record_count_conflict", blocking_scope="import")
         )
     with store.transaction():
+        issue_buffer: dict[str, dict[str, Any]] | None = (
+            {} if len(parsed.assertions) + len(parsed.issues) >= 128 else None
+        )
         for problem in parsed.issues:
-            _issue(store, import_id, problem, periods)
+            _issue(store, import_id, problem, periods, issue_buffer)
         fatal = any(problem.blocking_scope == "import" for problem in parsed.issues)
         accepted = 0
         rejected = 0
         delivery_mappings: dict[str, tuple[str, str]] = {}
+        # Small imports retain the simple path; corpus-sized imports use the same
+        # records/IDs and transaction with bounded vector insertion.
+        buffer: dict[str, list[dict[str, Any]]] | None = (
+            defaultdict(list) if len(parsed.assertions) >= 128 else None
+        )
+        if not fatal and mapping_policy == "delivery" and buffer is not None:
+            delivery_mappings = _delivery_mappings(
+                store, import_id, delivery_id, mapping_version, parsed.assertions, periods
+            )
         verified_mapping_deliveries = {delivery_id}
         resolved: tuple[str, str] | None
         if not fatal:
-            for item in parsed.assertions:
+            for item, raw_json in zip(parsed.assertions, raw_fragments, strict=True):
                 unknown_period = next(
                     (
                         p
@@ -408,6 +615,7 @@ def ingest(
                             field="effective_period",
                         ),
                         periods,
+                        issue_buffer,
                     )
                     rejected += 1
                     continue
@@ -455,21 +663,35 @@ def ingest(
                                 identifier=item.source_identifier,
                             ),
                             periods,
+                            issue_buffer,
                         )
                         rejected += 1
                         continue
                 assert resolved is not None
                 if mapping_policy == "existing":
                     _verify_mapping_original(store, resolved[1], verified_mapping_deliveries)
-                _publish(store, import_id, delivery_id, item, *resolved)
+                _publish(
+                    store,
+                    import_id,
+                    delivery_id,
+                    item,
+                    *resolved,
+                    buffer=buffer,
+                    raw_json=raw_json,
+                )
                 accepted += 1
+            if buffer is not None:
+                for table, records in buffer.items():
+                    store._insert_many(table, records)
         else:
             rejected = len(parsed.assertions)
+        if issue_buffer is not None:
+            store._insert_many("import_issue", list(issue_buffer.values()), existing_ok=True)
         # Counts measure assertion candidates, not worksheet rows. Fatal parse failure
         # may yield zero candidates; its import-level issue remains explicit.
         store.finish_import(
             import_id,
-            status="accepted" if not fatal and accepted else "rejected",
+            status="accepted" if not fatal and (accepted or parsed.records == 0) else "rejected",
             record_count=accepted + rejected,
             accepted_count=accepted,
             rejected_count=rejected,
@@ -553,6 +775,14 @@ def _verify_mapping_original(store: Store, mapping_id: str, verified: set[str]) 
 def _verify_import_originals(store: Store, import_id: str) -> None:
     batch = store.get_record("import_batch", import_id)
     deliveries = {str(batch["delivery_id"])}
+    if batch["parser_version"] == "lms-ftp-zip-v1":
+        adapter_context = json.loads(batch["interpretation_context"])["adapter_context"]
+        profile = adapter_context.get("price_basis_override")
+        if profile:
+            evidence = store.get_record("source_delivery", profile["evidence_delivery_id"])
+            if evidence["content_hash"] != profile["evidence_sha256"]:
+                raise FoundationError("Pinned LMS monetary evidence hash changed")
+            deliveries.add(str(evidence["delivery_id"]))
     mappings = " UNION ".join(
         f"SELECT mapping_id FROM {table} WHERE import_id = ?" for table in TABLE_FIELDS
     )

@@ -15,15 +15,15 @@ ignored by Git. The content guard also rejects them if force-staged. Shared
 direction and contracts belong in the documents above; delivery guidance lives here.
 
 ```text
-uv sync --locked --group dev --group browser
-uv run pre-commit install --hook-type pre-commit --hook-type pre-push
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src/bef_redbird
-uv run pytest -m "not browser and not private"
-uv run playwright install chromium
-uv run pytest -m browser tests/browser
-uv run python scripts/check_repo_hygiene.py --tracked
+uv sync --locked --group dev --group browser --group research
+uv run --no-sync pre-commit install --hook-type pre-commit --hook-type pre-push
+uv run --no-sync ruff check .
+uv run --no-sync ruff format --check .
+uv run --no-sync mypy src/bef_redbird
+uv run --no-sync pytest -m "not browser and not private"
+uv run --no-sync playwright install chromium
+uv run --no-sync pytest -m browser tests/browser
+uv run --no-sync python scripts/check_repo_hygiene.py --tracked
 git diff --check
 ```
 
@@ -51,6 +51,48 @@ the local diff to identify rejected files. This heuristic cannot prove privacy:
 inspect every staged diff and never use the guard as permission to upload data.
 Authored configuration, Markdown and small synthetic fixture recipes are allowed.
 Intentional new artifact types require a reviewed narrow policy change.
+
+## Working artifacts and session cleanup
+
+Keep temporary fixtures, extraction caches, trial outputs and disposable test
+databases in a clearly designated private scratch directory outside Git. Keep
+accepted run artifacts separate and identify their required files in one current
+manifest. Prefer a concise result report and operating instructions to a growing
+collection of overlapping session notes. Use temporary directories with cleanup
+for generated tests; retain a failed case only when needed to resolve or explain it.
+Choose the required final evidence before freezing an acceptance or recovery
+manifest. Exclude disposable restores, caches and superseded presentation-only
+proofs from that payload; do not pin an entire working directory indiscriminately.
+This does not permit discarding accepted scientific comparisons or source evidence.
+
+At the end of a session, remove its unneeded scratch material and superseded,
+unreferenced draft documents after checking current code, commands, manifests and
+handover links. Update canonical documents in place and remove stale active-task
+statements. Preserve unique owner/source context and necessary historical rationale;
+do not treat an old date or large file count as proof that a file is disposable.
+
+Keep originals, the authoritative store, frozen runs, source reconciliation proofs,
+accepted model/baseline comparisons, required configurations and verified recovery
+material. Retain enough evidence to reproduce both winning and losing methods;
+do not delete unfavourable results. Accepted manifests and immutable bundles must
+not be rewritten to conceal later changes. Record intentional documentation/path
+revisions separately when older acceptance pins them.
+
+Before retiring a large rehearsal restore, verify the retained backup and keep its
+restore receipt plus required maintenance inputs. Check resolved deletion paths and
+dependencies first; preserve existing user work. Record a compact cleanup inventory,
+removed size/count and retained-evidence check outside Git, then stop at acceptance.
+Reuse valid checks for unchanged inputs; rerun affected checks and required delivery
+gates, without repeatedly regenerating the whole corpus's fixtures or proof trees.
+
+When the owner requests manual disposal, stage only reviewed disposable material
+in the designated folder outside the repository. Verify resolved source and
+destination paths, prevent overwrites and preserve relative paths. Keep one compact
+move inventory outside that folder, with retained-copy evidence where applicable.
+The product, maintenance and recovery must remain usable after the owner deletes
+the entire staging folder. Do not stage unique originals or required frozen inputs.
+A move is a separate reversible operation, not a way to bypass an approval-review
+rejection; if it is also blocked, report the rejection and leave the files intact.
 
 ## Local foundation (F1)
 
@@ -82,8 +124,9 @@ Optional `--metadata` reads an external JSON object with `original_uri`,
 `coverage` and/or `replacement`. Supply only established information. Period
 references must already exist in the official calendar through `add_period`.
 Coverage/replacement manifests require a positive integer `version`; omitted
-manifests become `{"version":1,"kind":"unknown"}`. F1 retains these declarations;
-it does not validate release completeness or enact replacements.
+manifests become `{"version":1,"kind":"unknown"}`. Registration retains these
+declarations. [F3 selection](f3-selection.md) separately validates explicit
+release evidence and applies supported replacements within a pinned scope.
 
 Each known timing object contains `lower`, `upper` (ISO timestamps with offsets),
 `precision` (`instant`, `day` or `range`), `basis` and `source_timezone`.
@@ -152,7 +195,7 @@ scopes in the same mapping version are rejected; failed/rejected import evidence
 does not block later mappings. Revisions retain old records. `resolve_identifier`
 requires a mapping version and date and/or scope, uses only accepted import
 evidence, and never treats unknown validity as timeless. It is a reference lookup,
-not the decision-cutoff selection engine planned for F3.
+not a decision-cutoff selection. Use [F3 selection](f3-selection.md) for that.
 
 Import identity includes delivery, parser/schema/mapping versions and a canonical
 hash of interpretation context. Repeating them returns the same import, including
@@ -224,6 +267,10 @@ collection.
 
 ## Typed source ingestion (F2)
 
+For manifest-selected historical backfill, native PDF/RTF contracts, independent
+per-file proofs and maintenance, see [the archive procedure](f4-archive.md).
+The existing F1–F3 operations below remain supported.
+
 Migration 2 adds `price_observation`, `package_observation`,
 `classification_observation`, `supply_observation` and `lifecycle_event`.
 Migration 1 is unchanged. Each assertion pins its import, delivery, package and
@@ -244,6 +291,7 @@ logs remain external.
 | --- | --- | --- | --- | --- |
 | `cito` | `cito-workbook-v1` | XLSX `Table`; BIFF XLS with one unambiguous six-field sheet; normalized baseline headers | Price, storage attributes, separate current/upcoming ABC; delivery current/target periods, price type/bases, classification context and group namespace | Other XLSX sheet names unsupported; current group never copied to upcoming; upstream cost/query meaning must be supplied explicitly |
 | `lms-history` | `lms-history-workbook-v1` | XLSX `Medicinpriser data`, exact AIP rows, Excel-date/YYYYMMDD headings | AIP prices at column dates; optional current attributes; explicit tax/fee basis | No inferred calendar slots; unknown attribute period remains unknown; non-AIP rows supply no prices |
+| `lms-history` | `lms-history-workbook-v2` | Same source schema; explicit bounded extraction added for F3 | V1 meanings with `subset_identifiers` (1–5 canonical IDs) and `subset_periods` (1–2 dates); matching `partial_extract` coverage filter required | Original coordinates retained; requested date headings must exist; undated attributes remain excluded from dated selection; no whole-market completeness claim |
 | `price-changes` | `price-changes-workbook-v1` | XLSX new/old AIP and registered-price columns, fixed header row and anchored tariff/run metadata | Package attributes; separate effective and reported previous prices; delivery current period and tax/fee basis | Declared tariff mismatch rejects import; run date is not publication; prior price effective period remains unknown; reported percentage retained raw, never used as AIP change |
 | `introductions` | `introductions-workbook-v1` | XLSX existing/new formulation titles, header row 5/6 and two identifier punctuation variants | Attributes, AIP/registered prices, introduction; current period must match explicit tariff metadata; tax/fee basis | Introduction meaning follows report title/tariff date; no guessed publication or separate old lifecycle event |
 | `discontinued` | `discontinued-workbook-v1` | XLSX separate stop and permanent-deletion date columns, supported newline/header escaping | Current/undated attributes and separate source-reported lifecycle dates; optional evidenced current period | Date-versus-announcement semantics remain `unknown`, quality `incomplete`; no historical date assigned to current attributes; blank dates do not create events |
@@ -256,10 +304,10 @@ containing dates, folders and modification times never supply report context.
 
 Medicine-price PDFs, historical RTF variants, older lifecycle layouts, filtered
 search exports and structured LMS release members are **not supported** by these
-versions. Available samples establish those families' existence, not validated
-equivalent schemas. PDF extraction/layout and RTF family-specific record semantics
-remain unverified; structured LMS samples/specification vintages require
-member/encoding/release validation. No FTP acquisition or archive backfill is run.
+F2 adapter versions. At F2 acceptance, those families were unverified and no FTP
+acquisition or archive backfill had run. Later F4 and E1 support is recorded in
+[progress.md](progress.md); these historical limits do not describe the whole
+current implementation.
 
 ### Commands and context
 
@@ -350,7 +398,8 @@ scope; `declaration_only` never means independently verified market completeness
 Unknown coverage stays unknown. Supported coverage kinds are `unknown`,
 `complete_snapshot`, `changes`, `patch`, `partial_extract`; optional `family` and
 `record_count` declarations are checked. An explicit filter contradicting a
-complete snapshot rejects publication. Replacement application belongs to F3.
+complete snapshot rejects publication. Replacement application requires the
+separate, explicit evidence described in the [F3 guide](f3-selection.md).
 
 Exact amounts have no rounding/noise tolerance in F2. Zero remains evidence.
 Missing, unreported, blank, withdrawn, invalid and conflicting states are distinct;
@@ -380,6 +429,169 @@ WAL or overwrite a failed/corrupt store to force recovery. These guarantees cove
 tested process interruption and cold copies, not power-loss durability.
 
 ## Reviewing application changes
+
+### FTP maintenance
+
+The local maintenance module uses an explicit private configuration that names the
+manifest-selected database, archive, inventory and operation directory. It shares
+the existing Store transaction and writer contracts. From the repository:
+
+```powershell
+.venv/Scripts/python.exe -m bef_redbird.foundation.ftp_maintenance status --config $configPath
+.venv/Scripts/python.exe -m bef_redbird.foundation.ftp_maintenance dry-run --config $configPath
+.venv/Scripts/python.exe -m bef_redbird.foundation.ftp_maintenance update --config $configPath
+.venv/Scripts/python.exe -m bef_redbird.foundation.ftp_maintenance resume --config $configPath
+```
+
+`update` discovers the current remote catalogue; `resume` continues a checkpointed
+inventory. `dry-run` reports stored state without network or database mutation.
+An uncaught update failure records its exception type and bounded code locations
+in the operation directory's `last-failure.json`, when that directory is writable.
+It omits exception messages, input contents and credentials. Read-only status and
+dry-run failures do not write diagnostics. The CLI reports when no receipt could
+be saved; a failure receipt never changes the accepted publication or checkpoints.
+Use `--recheck` to fetch selected bytes again, including files whose remote size
+and modification timestamp did not change. Metadata equality is not proof that
+remote bytes remained unchanged. `cancel` requests a stop between batches;
+`clear-cancel` removes that request before resuming. No lock or WAL is removed.
+The optional `registry_audit_cache_mib` setting bounds the verifier's complete-input
+cache (default 128 MiB, allowed 32–512). It changes resource use, not source
+interpretation or acceptance. Use measured consecutive-release working sets when
+tuning it; a cache smaller than that working set can slow repeated audits.
+Reviewed loose-file alternatives use the optional `reviewed_alternative_transports`
+binding. It pins a bounded review and its source evidence by SHA256, with exact
+native component hashes. These partial references remain outside canonical
+replacement coverage; an unreviewed or changed component stops that scope.
+A scope may explicitly set `interpretation: "raw_only"` to retain unsupported
+alternative bytes with their reviewed phase and reason. This creates no typed
+assertions or replacement coverage. Omitted interpretation keeps strict partial
+reference validation.
+
+The PowerShell maintenance wrapper is the Task Scheduler execution path. Use
+`-AcquireOnly` with `update` or `resume` for download-only collection: source bytes,
+receipts and acquisition metadata are retained, without database interpretation
+or canonical publication. The manual wrapper still defaults to full maintenance
+when that switch is omitted. `status` directs the operator to Windows Task
+Scheduler for the installed task state; it does not infer native task state.
+
+`New-F5ScheduledTask.ps1` writes a disabled XML definition and never installs or
+enables it. Its default is `DownloadOnly`, `InteractiveToken`, the next local
+18:30 boundary and daily catch-up. `-StartAt`, `-NoCatchUp`, `-RequireAcPower`,
+`-LogonType` and `-Mode` make later changes explicit. Download-only defaults to
+battery operation; full maintenance requires AC. The execution limit remains
+forty-eight hours; `IgnoreNew` and the wrapper lock prevent overlapping updates.
+
+On 28 October the owner authorized activation with the existing signed-in account
+and subsequently required removal of the WinSCP dependency entirely. Collection now
+uses Python's standard-library FTP client. `scripts/Initialize-FtpConnection.ps1
+-ConfigFile <absolute-private-config>` opens local setup for the explicit endpoint,
+port, protocol and credentials. The dialog stores a Windows CurrentUser DPAPI blob
+outside Git with restricted permissions and preserves the previous config before
+adding `ftp_transport`. It never reads another client's saved login. Neither secrets
+nor server response text enter acquisition receipts, command arguments or logs.
+
+Verified explicit FTPS protects control and data channels. Plain FTP requires an
+explicit local choice; there is no protocol downgrade or guessed LIST parser.
+MLSD directory facts retain their raw values and UTC modification metadata; they
+do not establish publication times. Native versioned JSON evidence binds operations,
+paths, byte counts, hashes and acquisition intervals. Historical WinSCP XML remains
+readable for evidence/replay, but the old executable helper is retired.
+
+Active data receives check cancellation and remaining deadlines, including incomplete
+directory lines. Standard connection/control operations retain socket timeouts;
+these are not a universal hard wall-clock bound against DNS or control-channel stalls.
+The native Task Scheduler execution limit is a separate outer boundary.
+
+Signed-in mode needs the user's interactive session and an awake machine; it is not
+signed-out unattended operation. The private operating entry records the actual
+installed definition and acceptance. Moving to a separate collector that runs while
+signed out requires new credential provisioning under that account and reviewed
+runtime/configuration permissions.
+Same-account credential encryption does not isolate secrets from that account.
+No collection, interpretation or publication path runs model fitting or promotion.
+
+Canonical publication requires reviewed calendar coverage for every included
+registry date. A future date beyond that calendar stops publication while the
+previous dataset stays usable. Extend the private reviewed calendar from source
+evidence before resuming; do not derive tariff boundaries from download order or
+filenames. Status shows aggregate publication counts; full frozen source bindings
+remain in the private publication receipt.
+New dataset choices receive full verification inside their insertion transaction;
+failure rolls back those choices. Maintenance advances its operating pointer only
+after publication returns a verified result and the Store closes successfully.
+An identical retry verifies the existing dataset without adding another dataset.
+
+Supplier reports remain a separate supplement. The owner-selected routine is one
+manual website download every fourteen days; it does not require the archive
+downloader. Run `scripts/Import-SupplierReport.ps1 -Path <downloaded-report.xls>`;
+the default config resolves to the adjacent private data operating entry point.
+`-ConfigFile` supports an explicit operating configuration. The command retains
+original bytes and the actual first receipt, checks native dates/schema, independently
+reconciles the interpretation and maintains the source pins before publication.
+Identical retries reuse accepted observations. Changed overlapping reports remain
+verified evidence awaiting revision review; they do not silently replace facts.
+Other website collection requires an evidenced useful gap in FTP, assessed on
+needed fields rather than every printed report assertion. Historical preservation
+does not itself require continued collection or duplicate live database records.
+The lean migration retains typed FTP facts and required provenance, supplier
+assertions and reviewed exceptions. Earlier experiments and retired website
+interpretations use the retained pre-cleanup recovery arrangement.
+
+The maintenance publication receipt identifies the canonical dataset. Future
+research should pin that dataset ID and use `foundation.registry_selection.query`
+for resolved prices, packages, classifications and other supported domains.
+Raw observation tables and daily source editions are evidence, not independent
+training examples. The bounded query retains exact monetary values, identity
+episodes, phase, context and explicit missing/conflicting states. Supply and
+supplementary evidence retain their own grain and require supported identity joins.
+`status(store, dataset_id, verify=True)` verifies all frozen inputs and can take
+substantial time. After that succeeds in the same unchanged open Store, bounded
+queries may use `verify=False` to avoid repeating the full history check per page.
+The default remains verification; `extract` verifies and streams an explicit domain
+to a new external CSV when an export is needed.
+Query limits bound returned rows, not the memory or time needed to resolve the
+underlying history. A full historical price query can exceed laptop resources.
+The private coverage reporter uses reviewed partitions with explicit engine and
+spill budgets. Price partitions retain each package's entire history before
+identity windows are evaluated; legacy partitions preserve complete deduplication
+keys. Splitting prices by date first would change identity semantics. One atomic
+checkpoint retains completed query results for matching database bytes, inputs,
+queries and runtime settings. Do not treat that aggregate report as a tested
+full-panel export or assume that CSV streaming bounds the SQL engine's working
+memory.
+
+Compressed cold backup/restore APIs are `backup_store_compressed` and
+`restore_store_compressed` in `foundation.recovery`. They preserve logical hashes,
+verify compressed and decompressed database bytes, require unused restore paths,
+and do not migrate the input. Keep external operation inputs/code beside the cold
+store directory, outside its manifest-controlled contents.
+`foundation.lean_recovery` captures the current store, explicitly reviewed
+operating metadata, exact producer/dependencies and frozen training bundle. Its
+separate restore verifies byte integrity, schema, native retry, maintenance and
+supplier pointers, and full training readback. It preserves captured metadata
+and creates a distinct runtime copy for relocated mutable operating pointers.
+The runtime training template resolves its ledger and recovery references to
+verified captured files, so a later refresh works without the original workspace.
+Captured templates and frozen bundles retain their original bytes.
+The restored configuration names its recovery workspace separately from the
+producer and supplies `runtime/recovery-metadata.json` for a subsequent backup.
+New cold bundles record exact reference-file locations, avoiding overlapping
+workspace prefixes across nested restores. Synthetic checks cover a refreshed
+bundle's second restore and another refresh/backup with earlier locations absent.
+
+The [full-history training guide](training-data.md) documents the versioned
+Parquet producer, bounded reader, task/feature contract, chronological windows
+and thin CatBoost Pool adapter. Preparation constructs inputs without fitting or
+predicting. Keep accepted E1 artifacts with their original reader. Current
+readiness evidence belongs in the private operating receipts, not old coverage
+counts or a recent-period sample.
+
+For creating and inspecting frozen selections, follow the
+[F3 selection guide](f3-selection.md). It documents the complete configuration,
+independent audit gate, explicit revision evidence, availability modes and recovery
+procedure. The API is `Store.create_selection(configuration)` and
+`Store.inspect_selection(selection_id)`; CLI commands are `select --config` and
+`selection <id>`. These operate separately from the existing application.
 
 For data-foundation work, use the acceptance scenarios in
 [data-foundation.md](data-foundation.md). Test delivery/import identity, revision
@@ -419,6 +631,17 @@ the implemented component, actual verification, unresolved dependencies and next
 slice. Keep private audit evidence and verbose logs outside Git. Update canonical
 direction/contracts when approved decisions change; do not create competing
 handover specifications.
+
+Use the current private operating entry point to find storage and evidence. Do
+not create a new top-level milestone, retry or proof directory just to distinguish
+an attempt. Keep temporary work inside the existing operation's scratch area;
+publish only the final necessary acceptance evidence. Before delivery, classify
+new outputs as active inputs, immutable accepted evidence, recovery dependencies
+or disposable material. Check references before moving anything, keep one concise
+external move receipt, and stage owner-reviewed disposal without overwrites when
+manual deletion is requested. Consolidate superseded operating instructions into
+the current entry point and record any required path remapping. Report what was
+actually staged and what must remain. A staging move does not free disk space.
 
 Before a PR, inspect origin, status, staged and unstaged diffs, branch and worktrees.
 Run the relevant checks and record factual results in the PR template. Explain

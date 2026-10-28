@@ -1,5 +1,52 @@
 # Current application: deployment and operating limits
 
+## Local trained-model workspace
+
+`pharmacist_app.py` is the assisted pharmacist MVP. It reads an operator-published,
+hash-bound market index and saved assessments. Cito is its only file upload. The
+legacy `app.py` remains the separate deterministic workbook baseline.
+
+Set `REDBIRD_ASSESSMENT_CONFIG` to a private JSON configuration outside Git containing
+`root` (private assessment storage), `protocol_root` (the retained prospective
+comparison operation) and `market` (path/SHA-256/size pin of a market index). Each
+index period binds origin, target, causal features and optional official outcome,
+period-bound Cito and price-history artifacts. The operator prepares these inputs;
+the viewer never opens the live database. Do not commit actual configurations.
+
+On Windows, run `scripts/Start-Pharmacist.ps1 -ConfigFile <private-config.json>`.
+It installs the locked `inference` group, including CatBoost, SciPy, psutil and
+threadpoolctl, and binds only `127.0.0.1:8530`. Repeated launches reuse the verified
+process. Add `-Stop` or `-Restart` for that same process; occupied unrelated ports
+fail clearly. Keep the PC awake and signed in; Windows may be locked. This does
+not configure signed-out collection or change power settings.
+
+For another local operating system, use `uv sync --locked --no-dev --group inference`
+and `uv run --no-sync streamlit run pharmacist_app.py --server.address 127.0.0.1
+--server.port 8530 --server.headless true --browser.gatherUsageStats false` with
+the environment variable set. The legacy requirements export does not install
+the additional inference group; it is not the pharmacist launcher environment.
+
+Analysis starts only on explicit submission, in a separate local Python process.
+Jobs retain actual stage names, source/model/context identities, full predictions,
+current-only comparison, exclusions and subsequent outcome attachment. Identical
+requests reuse verified work; changed input gets a separate identity. Native OS
+locking prevents simultaneous inference. Browser reconnection reads job status;
+interrupted jobs can be retried. Notes are stored per assessment and package.
+PDF exports verify saved predictions and retain a checksum receipt. All artifacts,
+uploads, notes and logs remain outside Git. The last successful assessment survives
+a failed new job. Source data are not sent to a runtime AI service.
+
+These are diagnostic research reviews, not prospective enrolment, orders, quantity
+recommendations or pharmacy profit forecasts. The next-period view supports missing
+Cito; historical final ABC is never passed off as a received advance report. The
+retained three-year amount model is the display reference; six/full-history estimates
+are optional sensitivity views. No unsupported monetary interval is shown.
+
+## Earlier workbook baseline
+
+The following sections describe the separate `app.py` baseline and are not the
+deployment instructions for the trained-model workspace above.
+
 This document describes the existing Streamlit application. It does not select
 the future product platform, hosting provider or persistent-storage architecture.
 New work follows [direction.md](direction.md) and
