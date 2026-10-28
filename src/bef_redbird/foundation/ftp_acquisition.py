@@ -13,6 +13,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
@@ -166,7 +167,7 @@ def acquisition_lock(config: AcquisitionConfig) -> Iterator[None]:
             stream.flush()
         stream.seek(0)
         try:
-            if os.name == "nt":
+            if sys.platform == "win32":
                 import msvcrt
 
                 msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
@@ -179,7 +180,7 @@ def acquisition_lock(config: AcquisitionConfig) -> Iterator[None]:
             yield
         finally:
             stream.seek(0)
-            if os.name == "nt":
+            if sys.platform == "win32":
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)

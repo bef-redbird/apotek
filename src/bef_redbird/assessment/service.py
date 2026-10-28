@@ -118,12 +118,15 @@ def launch(job: Path) -> None:
         return
     os.close(fd)
     try:
+        creation_flags = 0
+        if sys.platform == "win32":
+            creation_flags = subprocess.CREATE_NO_WINDOW
         process = subprocess.Popen(
             [sys.executable, "-B", "-m", "bef_redbird.assessment.service", str(job)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            creationflags=creation_flags,
         )
         atomic_json(
             job / "spawn.json",

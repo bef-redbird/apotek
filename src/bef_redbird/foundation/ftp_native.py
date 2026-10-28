@@ -14,6 +14,7 @@ import json
 import os
 import re
 import ssl
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -91,7 +92,7 @@ def configuration(raw: Any) -> NativeConfig | None:
 
 def credentials(path: Path) -> tuple[str, str]:
     """Decrypt our own opaque DPAPI blob inside the transfer process only."""
-    if os.name != "nt":
+    if sys.platform != "win32":
         raise NativeFtpError("CurrentUser DPAPI credentials require Windows")
     if path.is_symlink() or path.stat().st_size > 65536:
         raise NativeFtpError("Invalid private DPAPI credential file")
