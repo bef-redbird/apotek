@@ -98,7 +98,11 @@ def native(snapshot: Path, previous: pd.DataFrame) -> tuple[pd.DataFrame, list[d
             and old["canonical_identity"]
             and old["drug_id"] == p["drug_id"]
             and old["creation_date"] == created
-            and (not old["exit_date"] or old["exit_date"] > day)
+            and (
+                not old["exit_date"]
+                or old["exit_date"] == date(1900, 1, 1)
+                or old["exit_date"] > day
+            )
         )
         # SQL json_array serializes dates as ISO strings, with no spaces.
         canonical = (

@@ -353,7 +353,10 @@ def export_pdf(assessments: list[tuple[dict[str, Any], pd.DataFrame]], destinati
             chunks = [rows.iloc[start : start + 25] for start in range(0, len(rows), 25)] or [rows]
             for part, chunk in enumerate(chunks, 1):
                 _table_page(document, manifest, chunk, summary, part, len(chunks))
-        _methods_page(document, assessments)
+        # Keep metadata readable as the saved history grows; each page retains
+        # the method alongside at most three complete assessment identities.
+        for start in range(0, len(assessments), 3):
+            _methods_page(document, assessments[start : start + 3])
         for index in range(len(document)):
             page = document[index]
             page.insert_text(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import time
@@ -10,6 +11,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+from openpyxl import Workbook
 
 from bef_redbird.assessment import service
 from bef_redbird.research.e4_common import read
@@ -387,3 +389,65 @@ def test_worker_cannot_execute_changed_code_under_an_older_producer_identity(
         service.execute(job)
     assert calls == []
     assert not (job / "assessment.json").exists()
+
+
+def test_uploaded_cito_period_is_retained_without_market_index_registration(market: tuple) -> None:
+    cfg, root, calls = market
+    configuration = read(cfg)
+    published_path = Path(configuration["market"]["path"])
+    published = read(published_path)
+    later_features = cfg.parent / "later.parquet"
+    pd.read_parquet(published["periods"][0]["features"]["path"]).assign(
+        period_start=pd.Timestamp("2026-10-26"), target_period=pd.Timestamp("2026-11-09")
+    ).to_parquet(later_features, index=False)
+    published["periods"].append(
+        {
+            "origin": "2026-10-26",
+            "target": "2026-11-09",
+            "features": pin(later_features),
+        }
+    )
+    published_path.write_text(json.dumps(published))
+    configuration["market"] = pin(published_path)
+    cfg.write_text(json.dumps(configuration))
+    book = Workbook()
+    sheet = book.active
+    assert sheet is not None
+    sheet.title = "Table"
+    sheet.append(["varenr", "opbevkode", "kostpris", "subkode", "nysubkode", "subgrp"])
+    sheet.append(["000001", "N", 100, "B", "C", "1"])
+    stream = io.BytesIO()
+    book.save(stream)
+    upload = stream.getvalue()
+    context = {
+        "current_period": "2026-10-12",
+        "target_period": "2026-10-26",
+        "next_period_start": "2026-10-26",
+        "period_evidence": "Synthetic confirmed period",
+        "reported_receipt": "2026-10-17T11:00:00+02:00",
+    }
+    later = dict(
+        context,
+        current_period="2026-10-26",
+        target_period="2026-11-09",
+        next_period_start="2026-11-09",
+    )
+    first = service.request(cfg, "2026-10-12", upload, context)
+    queued = service.request(cfg, "2026-10-26", upload, later)
+    service.execute(first)
+    assert calls == ["current", "hybrid"]
+    assert len(list((root / "reports").glob("*/report.json"))) == 1
+    assert all(not period.get("cito") for period in read(published_path)["periods"])
+    original = (first / "assessment.json").read_bytes()
+    with pytest.raises(ValueError, match="anden periode"):
+        service.request(cfg, "2026-10-26", upload, later)
+    with pytest.raises(ValueError, match="anden periode"):
+        service.execute(queued)
+    assert calls == ["current", "hybrid"]
+    assert not (queued / "assessment.json").exists()
+    assert (first / "assessment.json").read_bytes() == original
+    assert service.request(cfg, "2026-10-12", upload, context) == first
+    revised = service.request(
+        cfg, "2026-10-12", upload, dict(context, reported_receipt="2026-10-17T11:01:00+02:00")
+    )
+    assert revised != first

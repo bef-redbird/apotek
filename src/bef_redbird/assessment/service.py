@@ -39,6 +39,29 @@ def load(path: Path) -> tuple[dict[str, Any], pd.DataFrame]:
     return saved, pd.read_parquet(checked(saved["files"]["predictions"]))
 
 
+def _check_cito_period(cfg: dict[str, Any], digest: str, origin: str, target: str) -> None:
+    """Accepted uploads retain their period even before inclusion in a market index."""
+    for known in cfg["periods"]:
+        if known.get("cito"):
+            old = read(checked(known["cito"]))
+            if old["original"]["sha256"] == digest and (known["origin"], known["target"]) != (
+                origin,
+                target,
+            ):
+                raise ValueError(
+                    "Denne Cito-rapport er tidligere verificeret for en anden periode."
+                )
+    for path in (Path(cfg["root"]) / "reports").glob("*/report.json"):
+        old = read(path)
+        if old["original"]["sha256"] == digest:
+            checked(old["original"])
+            context = old["context"]
+            if (context["current_period"], context["target_period"]) != (origin, target):
+                raise ValueError(
+                    "Denne Cito-rapport er tidligere verificeret for en anden periode."
+                )
+
+
 def request(
     configuration: Path,
     origin: str,
@@ -67,13 +90,7 @@ def request(
             raise ValueError("Cito-filen er for stor.")
         # Previously reviewed bytes cannot be relabelled as a new-period report.
         digest = hashlib.sha256(upload).hexdigest()
-        for known in cfg["periods"]:
-            if known.get("cito"):
-                old = read(checked(known["cito"]))
-                if old["original"]["sha256"] == digest and known["origin"] != origin:
-                    raise ValueError(
-                        "Denne Cito-rapport er tidligere verificeret for en anden periode."
-                    )
+        _check_cito_period(cfg, digest, origin, period["target"])
     root = Path(cfg["root"])
     source_code = Path(__file__).read_bytes()
     code_path = root / "producers" / (hashlib.sha256(source_code).hexdigest() + ".py")
@@ -248,6 +265,9 @@ def execute(job: Path) -> Path:
             source = job / "cito.bin"
             if hashlib.sha256(source.read_bytes()).hexdigest() != binding["upload_sha256"]:
                 raise ValueError("Cito-kilden er ændret.")
+            # Recheck inside the single-writer lock: another queued job may have
+            # accepted these bytes since this request was submitted.
+            _check_cito_period(cfg, binding["upload_sha256"], origin, target)
             report = intake_report(source, root / "originals", root / "reports", binding["context"])
         elif binding["retained_report"]:
             report = checked(period["cito"])

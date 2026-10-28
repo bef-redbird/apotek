@@ -115,6 +115,29 @@ def test_invalid_rank_or_metadata_never_creates_report(tmp_path: Path) -> None:
     assert not destination.exists()
 
 
+def test_growing_history_paginates_every_assessment_identity_without_shrinking(
+    tmp_path: Path,
+) -> None:
+    manifest, frame = sample()
+    assessments = [
+        (dict(manifest, assessment_id=f"{number:064x}"), frame.assign(selected=False))
+        for number in range(1, 11)
+    ]
+    path = export_pdf(assessments, tmp_path / "history.pdf")
+    with pymupdf.open(path) as document:
+        methods = [page for page in document if "Metode og sporbarhed" in page.get_text()]
+        assert len(methods) == 4
+        text = "\n".join(page.get_text() for page in methods)
+        for number in range(1, 11):
+            assert text.count(f"{number:064x}") == 1
+        for page in methods:
+            assert "Beholdte modeller" in page.get_text()
+            assert "Fortolkning og begrænsninger" in page.get_text()
+            for word in page.get_text("words"):
+                assert 0 <= word[0] < word[2] <= page.rect.width
+                assert 0 <= word[1] < word[3] <= page.rect.height
+
+
 @pytest.mark.parametrize(
     "metadata",
     [
